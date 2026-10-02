@@ -89,7 +89,7 @@ jobs:
       - name: Show VSIX contents
         working-directory: vscode
         run: |
-          vsix=$(ls -1 *.vsix | head -n1)
+          vsix=$(ls -1 *.vsix | sed -n 1p)
           unzip -l "$vsix"
           for entry in extension/package.json extension/dist/extension.js extension/dist/webview.js; do
             unzip -l "$vsix" "$entry" >/dev/null || { echo "::error title=VSIX incomplete::$vsix does not contain $entry. Check vscode/.vscodeignore."; exit 1; }

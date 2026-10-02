@@ -97,7 +97,7 @@ jobs:
           rustc -vV
           cargo --version
           git --version
-          if [ "$RUNNER_OS" = "Linux" ]; then ldd --version | head -n1; fi
+          if [ "$RUNNER_OS" = "Linux" ]; then ldd --version | sed -n 1p; fi
           echo "::endgroup::"
           echo "Source commit embedded in the About box: $(git rev-parse --short HEAD)"
 
@@ -263,12 +263,14 @@ jobs:
         run: |
           echo "::group::Versions"
           cat /etc/redhat-release
-          ldd --version | head -n1
+          # sed rather than head: head exits after one line, and under pipefail
+          # the writer's SIGPIPE fails the step (exit 141) whenever it loses that race.
+          ldd --version | sed -n 1p
           echo "Node:    $(node --version)"
           echo "npm:     $(npm --version)"
           rustc -vV
           cargo --version
-          gcc --version | head -n1
+          gcc --version | sed -n 1p
           git --version
           echo "::endgroup::"
 
@@ -321,7 +323,7 @@ jobs:
         run: |
           # The binary is renamed to the kebab-cased productName, which embeds
           # the version, so locate it by prefix.
-          bin=$(find tauri/src-tauri-v1/target/release -maxdepth 1 -type f -name 'git-time-lapse-view-v*' -perm -u+x | head -n1)
+          bin=$(find tauri/src-tauri-v1/target/release -maxdepth 1 -type f -name 'git-time-lapse-view-v*' -perm -u+x -print -quit)
           if [ -z "$bin" ]; then
             echo "::error title=Binary not found::No git-time-lapse-view-v* executable in tauri/src-tauri-v1/target/release."
             ls -la tauri/src-tauri-v1/target/release
