@@ -1,0 +1,26 @@
+{
+  "name": "git-time-lapse-visual-studio",
+  "displayName": "Git Time-Lapse View v1.1.0",
+  "description": "Git Time-Lapse View v1.1.0 — WebView2 bundle for the Visual Studio extension",
+  "version": "1.1.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "css-loader": "^6.10.0",
+    "style-loader": "^3.3.4",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.4.0",
+    "webpack": "^5.90.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "highlight.js": "^11.9.0"
+  }
+}

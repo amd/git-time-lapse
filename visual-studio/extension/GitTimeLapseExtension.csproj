@@ -1,0 +1,111 @@
+<!-- Copyright Advanced Micro Devices, Inc. -->
+<!-- SPDX-License-Identifier: MIT -->
+<Project>
+  <!--
+    SDK-style VSIX project for the Git Time-Lapse View Visual Studio extension.
+
+    Uses EXPLICIT Sdk imports (top + bottom) instead of the Sdk="" attribute so
+    the VSSDK build targets can be imported AFTER Microsoft.NET.Sdk's targets.
+    That ordering matters: the VSSDK's Microsoft.VsSDK.targets seeds several
+    defaults (CreatePkgDefAssemblyToProcess=$(TargetPath),
+    TemplateOutputDirectory=$(IntermediateOutputPath), ...) with
+    Condition="== ''". If imported before the SDK computes those base paths, the
+    defaults capture empty strings and the VSIX/pkgdef targets fail
+    (VSSDK1032 / VSSDK1202). Importing after the SDK fixes all of them.
+
+    The Microsoft.VisualStudio.SDK meta-package tops out at 17.x on NuGet (there
+    is no 18.x SDK yet) and targets net472; extensions built this way load in
+    both VS 2022 (17.x) and VS 2026 (18.x). The vsixmanifest declares the
+    supported [17.0, 19.0) range. The webview bundle
+    (Resources/webview/webview.js) is produced by webpack and embedded as VSIX
+    content.
+  -->
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <RootNamespace>GitTimeLapse</RootNamespace>
+    <AssemblyName>GitTimeLapse</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <GeneratePkgDefFile>true</GeneratePkgDefFile>
+    <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+    <IncludeDebugSymbolsInVSIXContainer>false</IncludeDebugSymbolsInVSIXContainer>
+    <IncludeDebugSymbolsInLocalVSIXDeployment>false</IncludeDebugSymbolsInLocalVSIXDeployment>
+    <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
+    <CopyOutputSymbolsToOutputDirectory>false</CopyOutputSymbolsToOutputDirectory>
+    <!-- No project/item templates ship in this VSIX. -->
+    <DeployVSTemplates>false</DeployVSTemplates>
+    <!-- The SDK auto-globs .cs files; we keep an explicit AssemblyInfo, so turn
+         off the generated one to avoid duplicate assembly attributes. -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- This is a VSIX, not a standalone app; no deps.json/runtimeconfig. -->
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <StartAction>Program</StartAction>
+    <StartProgram Condition="'$(DevEnvDir)' != ''">$(DevEnvDir)devenv.exe</StartProgram>
+    <StartArguments>/rootsuffix Exp</StartArguments>
+    <DeployExtension Condition="'$(BuildingInsideVisualStudio)' == ''">false</DeployExtension>
+  </PropertyGroup>
+
+  <!-- VSCT command table compiled into Menus.ctmenu. MergeWithCTO ensures
+       the compiled .cto is embedded as a Win32 resource in the assembly,
+       which is required for ProvideMenuResource to find it at runtime. -->
+  <ItemGroup>
+    <VSCTCompile Include="GitTimeLapsePackage.vsct">
+      <ResourceName>Menus.ctmenu</ResourceName>
+    </VSCTCompile>
+    <MergeWithCTO Include="$(IntermediateOutputPath)GitTimeLapsePackage.cto" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="source.extension.vsixmanifest">
+      <SubType>Designer</SubType>
+    </None>
+  </ItemGroup>
+
+  <!-- Extension icon + webpack-built webview bundle, embedded in the VSIX.
+       Icons based on Google Material Symbols (Apache-2.0); see NOTICES.txt. -->
+  <ItemGroup>
+    <Content Include="Resources\icon.png">
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <Content Include="Resources\command-icon.png">
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <Content Include="Resources\LICENSE.txt">
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <Content Include="Resources\webview\webview.js">
+      <IncludeInVSIX>true</IncludeInVSIX>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- MenuCommandService (base of OleMenuCommandService.AddCommand) lives in the
+       System.Design framework assembly, which the SDK does not reference by default.
+       System.Windows.Forms provides FolderBrowserDialog (the folder picker). -->
+  <ItemGroup>
+    <Reference Include="System.Design" />
+    <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2094" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
+  </ItemGroup>
+
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+
+  <!-- VSSDK build targets, imported AFTER the SDK so their path-derived defaults
+       resolve. Defines VSCTCompile, GeneratePkgDef, CreateVsixContainer, etc. -->
+  <Import Project="$(VSToolsPath)\vssdk\Microsoft.VsSDK.targets" Condition="Exists('$(VSToolsPath)\vssdk\Microsoft.VsSDK.targets')" />
+
+  <!--
+    The .NET SDK's Build target doesn't invoke PrepareForRun (where legacy VSIX
+    projects chain pkgdef + VSIX creation). Run those targets after Build so
+    `msbuild -t:Build` produces the .vsix directly.
+  -->
+  <Target Name="EnsureVsix" AfterTargets="Build"
+          DependsOnTargets="GeneratePkgDef;CopyPkgDef;CreateVsixContainer" />
+</Project>

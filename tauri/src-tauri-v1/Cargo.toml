@@ -1,0 +1,58 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+# These two crates can never share a Cargo workspace, so each resolves its own
+# lockfile. Tauri 1 and Tauri 2 bind to different generations of the gtk-rs -sys
+# crates, and Cargo forbids two packages in one dependency graph from declaring
+# the same `links` native-library key -- web_kit2, gdk-3, gtk-3 and atk-1.0 all
+# collide. This is not a semver-collapse problem and no resolver version fixes
+# it; a unified resolve fails outright with "only one package in the dependency
+# graph may specify the same links value". The empty table stops cargo walking
+# up into any future workspace root.
+[workspace]
+
+[package]
+name = "git-time-lapse-v1"
+version = "1.1.0"
+description = "Git Time-Lapse View v1.1.0"
+authors = ["Advanced Micro Devices, Inc."]
+license = "MIT"
+repository = "https://github.com/amd/git-time-lapse"
+edition = "2021"
+rust-version = "1.77.2"
+
+# The [[bin]] name MUST equal `package.name`. The Tauri v1 CLI locates the
+# compiled binary by `package.name`, ignoring the bin target, and fails the
+# bundle step with "failed to rename ... No such file or directory" if the two
+# differ -- after a successful compile, so it looks like a packaging bug. v1
+# then renames the binary itself to the kebab-cased `package.productName`.
+[[bin]]
+name = "git-time-lapse-v1"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "1", features = [] }
+
+[dependencies]
+# Tauri v1 exists only for RHEL8/9, whose glib/webkit2gtk/libsoup are too old
+# for v2. The dialog plugin is built into v1 core, hence the feature rather
+# than a separate crate.
+#
+# The window-* features are not optional extras: v1 compiles each window
+# endpoint behind a cfg alias derived from these cargo features, so without
+# them `appWindow.setTitle`/`close` are absent from the command enum and reject
+# at runtime as ApiNotAllowlisted. The allowlist entry alone is not enough.
+# This set mirrors src-tauri/capabilities/default.json minus set-theme, which
+# v1 does not implement at all.
+tauri = { version = "1", features = [
+    "dialog-open",
+    "window-set-title",
+    "window-close",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri-plugin-window-state = "0.1"
+
+[features]
+# This feature is used for production builds or when a dev server is not
+# specified. DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]

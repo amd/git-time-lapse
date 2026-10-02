@@ -1,0 +1,8 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+node_modules/
+dist/
+dist-v1/
+src-tauri/target/
+src-tauri/gen/
+src-tauri-v1/target/

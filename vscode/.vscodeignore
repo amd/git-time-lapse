@@ -1,0 +1,12 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+.vscode/**
+.vscode-test/**
+src/**
+node_modules/**
+.gitignore
+tsconfig.json
+webpack.config.js
+**/*.map
+**/*.ts
+!dist/**

@@ -1,0 +1,13 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+node_modules/
+dist/
+# Generated webview bundle (webpack output)
+extension/Resources/webview/webview.js
+extension/Resources/webview/*.map
+# C# / MSBuild build outputs
+extension/bin/
+extension/obj/
+*.vsix
+# Detokenized manifest generated during build (source is source.extension.vsixmanifest)
+extension/extension.vsixmanifest

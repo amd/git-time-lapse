@@ -1,0 +1,51 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli-v1/schema.json",
+  "package": {
+    "productName": "Git Time-Lapse View v1.1.0",
+    "version": "1.1.0"
+  },
+  "build": {
+    "distDir": "../dist-v1",
+    "devPath": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev:v1",
+    "beforeBuildCommand": "npm run build:v1"
+  },
+  "tauri": {
+    "windows": [
+      {
+        "title": "Git Time-Lapse View v1.1.0",
+        "width": 1200,
+        "height": 800,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "allowlist": {
+      "all": false,
+      "dialog": {
+        "open": true
+      },
+      "window": {
+        "setTitle": true,
+        "close": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "identifier": "com.amd.gittimelapse",
+      "publisher": "Advanced Micro Devices, Inc.",
+      "targets": ["appimage", "deb", "rpm"],
+      "icon": [
+        "../src-tauri/icons/32x32.png",
+        "../src-tauri/icons/128x128.png",
+        "../src-tauri/icons/128x128@2x.png",
+        "../src-tauri/icons/icon.png",
+        "../src-tauri/icons/icon.ico",
+        "../src-tauri/icons/icon.icns"
+      ]
+    }
+  }
+}

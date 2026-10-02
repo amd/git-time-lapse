@@ -1,0 +1,43 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+# These two crates can never share a Cargo workspace, so each resolves its own
+# lockfile. Tauri 1 and Tauri 2 bind to different generations of the gtk-rs -sys
+# crates, and Cargo forbids two packages in one dependency graph from declaring
+# the same `links` native-library key -- web_kit2, gdk-3, gtk-3 and atk-1.0 all
+# collide. This is not a semver-collapse problem and no resolver version fixes
+# it; a unified resolve fails outright with "only one package in the dependency
+# graph may specify the same links value". The empty table stops cargo walking
+# up into any future workspace root.
+[workspace]
+
+[package]
+name = "git-time-lapse"
+version = "1.1.0"
+description = "Git Time-Lapse View v1.1.0"
+authors = ["Advanced Micro Devices, Inc."]
+license = "MIT"
+repository = "https://github.com/amd/git-time-lapse"
+edition = "2021"
+rust-version = "1.77.2"
+
+# The library is what the mobile targets link against; the binary target below
+# drives the desktop build. `lib.rs` is not used (main.rs is the entry point),
+# so we only declare the binary.
+[[bin]]
+name = "git-time-lapse"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri-plugin-dialog = "2.7.1"
+tauri-plugin-window-state = "2"
+
+[features]
+# This feature is used for production builds or when a dev server is not
+# specified. DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]

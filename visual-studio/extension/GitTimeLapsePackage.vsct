@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright Advanced Micro Devices, Inc. -->
+<!-- SPDX-License-Identifier: MIT -->
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!--
+    Command table for Git Time-Lapse View.
+
+    Defines the "Git Time-Lapse View" command as three separate buttons (one
+    per placement) so the handler can tell them apart by command ID:
+      - Tools menu                         -> blank viewer
+      - Solution Explorer file item menu   -> the selected file
+      - Editor code-window context menu    -> the active document
+    plus the shared icon and the tool window (opened by the command handler).
+  -->
+
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+
+  <Commands package="guidGitTimeLapsePackage">
+
+    <Groups>
+      <!-- Group on the Tools menu. -->
+      <Group guid="guidGitTimeLapseCmdSet" id="ToolsMenuGroup" priority="0x0600">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS" />
+      </Group>
+      <!-- Group on the Solution Explorer file item context menu. -->
+      <Group guid="guidGitTimeLapseCmdSet" id="SolutionExplorerGroup" priority="0x0600">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_ITEMNODE" />
+      </Group>
+      <!-- Group on the editor code-window context menu. -->
+      <Group guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN" />
+      </Group>
+    </Groups>
+
+    <Buttons>
+      <!--
+        One button per placement so the command handler can tell which surface
+        invoked it (all three share one Execute but branch on CommandID):
+          - Tools menu        -> blank viewer (no file resolved)
+          - Solution Explorer -> the selected file
+          - editor context    -> the active document
+      -->
+      <Button guid="guidGitTimeLapseCmdSet" id="OpenTimeLapseCommandId" priority="0x0100" type="Button">
+        <Parent guid="guidGitTimeLapseCmdSet" id="ToolsMenuGroup" />
+        <Icon guid="guidImages" id="bmpHourglass" />
+        <Strings>
+          <ButtonText>Git Time-Lapse View</ButtonText>
+          <ToolTipText>Open the Git Time-Lapse viewer</ToolTipText>
+        </Strings>
+      </Button>
+      <Button guid="guidGitTimeLapseCmdSet" id="OpenTimeLapseSolutionCommandId" priority="0x0100" type="Button">
+        <Parent guid="guidGitTimeLapseCmdSet" id="SolutionExplorerGroup" />
+        <Icon guid="guidImages" id="bmpHourglass" />
+        <Strings>
+          <ButtonText>Git Time-Lapse View</ButtonText>
+          <ToolTipText>Open the Git Time-Lapse viewer for this file's history</ToolTipText>
+        </Strings>
+      </Button>
+      <Button guid="guidGitTimeLapseCmdSet" id="OpenTimeLapseEditorCommandId" priority="0x0100" type="Button">
+        <Parent guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" />
+        <Icon guid="guidImages" id="bmpHourglass" />
+        <Strings>
+          <ButtonText>Git Time-Lapse View</ButtonText>
+          <ToolTipText>Open the Git Time-Lapse viewer for this file's history</ToolTipText>
+        </Strings>
+      </Button>
+    </Buttons>
+
+    <Bitmaps>
+      <!-- 16x16 command icon strip. usedList names the single glyph. -->
+      <Bitmap guid="guidImages" href="Resources\command-icon.png" usedList="bmpHourglass" />
+    </Bitmaps>
+
+  </Commands>
+
+  <Symbols>
+    <!-- Package GUID (matches GitTimeLapsePackage.PackageGuidString). -->
+    <GuidSymbol name="guidGitTimeLapsePackage" value="{7C6E5D4B-3A2F-1E0D-9C8B-7A6F5E4D3C2B}" />
+
+    <!-- Command set GUID (matches OpenTimeLapseCommand.CommandSet). -->
+    <GuidSymbol name="guidGitTimeLapseCmdSet" value="{2D3E4F5A-6B7C-8D9E-0A1B-2C3D4E5F6A7B}">
+      <IDSymbol name="ToolsMenuGroup" value="0x1020" />
+      <IDSymbol name="SolutionExplorerGroup" value="0x1021" />
+      <IDSymbol name="EditorContextGroup" value="0x1022" />
+      <IDSymbol name="OpenTimeLapseCommandId" value="0x0100" />
+      <IDSymbol name="OpenTimeLapseSolutionCommandId" value="0x0101" />
+      <IDSymbol name="OpenTimeLapseEditorCommandId" value="0x0102" />
+    </GuidSymbol>
+
+    <GuidSymbol name="guidImages" value="{3E4F5A6B-7C8D-9E0A-1B2C-3D4E5F6A7B8C}">
+      <IDSymbol name="bmpHourglass" value="1" />
+    </GuidSymbol>
+  </Symbols>
+
+</CommandTable>

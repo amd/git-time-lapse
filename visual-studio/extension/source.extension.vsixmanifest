@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright Advanced Micro Devices, Inc. -->
+<!-- SPDX-License-Identifier: MIT -->
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
+  <Metadata>
+    <Identity Id="AMD.git-time-lapse-vs" Version="1.1.0.0" Language="en-US" Publisher="AMD - Advanced Micro Devices" />
+    <DisplayName>Git Time-Lapse View</DisplayName>
+    <Description xml:space="preserve">Git Time-Lapse View v1.1.0 — visual time-lapse viewer for file history in git repositories. Step through a file's revisions with diff, blame, and age coloring.</Description>
+    <MoreInfo>https://github.com/amd/git-time-lapse</MoreInfo>
+    <License>Resources\LICENSE.txt</License>
+    <Icon>Resources\icon.png</Icon>
+    <PreviewImage>Resources\icon.png</PreviewImage>
+    <Tags>git;history;diff;blame;time-lapse;version-control</Tags>
+  </Metadata>
+  <Installation>
+    <!-- VS 2022 (17.0) through VS 2026 (18.x); [17.0, 19.0) covers both. -->
+    <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0, 19.0)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+    <InstallationTarget Id="Microsoft.VisualStudio.Pro" Version="[17.0, 19.0)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+    <InstallationTarget Id="Microsoft.VisualStudio.Professional" Version="[17.0, 19.0)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+    <InstallationTarget Id="Microsoft.VisualStudio.Enterprise" Version="[17.0, 19.0)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+  </Installation>
+  <Dependencies>
+    <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" d:Source="Manual" Version="[4.7.2,)" />
+  </Dependencies>
+  <Prerequisites>
+    <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[17.0, 19.0)" DisplayName="Visual Studio core editor" />
+  </Prerequisites>
+  <Assets>
+    <!-- VsPackage only: this extension registers a package + tool window + menu
+         commands via the pkgdef. It exports no MEF parts, so no MefComponent
+         asset (which would make VS needlessly probe the DLL for MEF exports). -->
+    <Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="Project" d:ProjectName="%CurrentProject%" Path="|%CurrentProject%;PkgdefProjectOutputGroup|" />
+  </Assets>
+</PackageManifest>

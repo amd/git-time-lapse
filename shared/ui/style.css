@@ -1,0 +1,2054 @@
+/* Copyright Advanced Micro Devices, Inc. */
+/* SPDX-License-Identifier: MIT */
+/*
+ * Git Time-Lapse View: styles.
+ *
+ * The whole window is themed via CSS custom properties toggled by the
+ * `body.dark` / `body.light` class.
+ */
+
+:root {
+  --font-ui: "Segoe UI", system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --font-mono: "Consolas", "Cascadia Mono", "Courier New", monospace;
+  /* Default code-area font size; overridden at runtime by the zoom controls
+     (JS sets --code-size on <html>). Keep in sync with FONT_DEFAULT in main.ts. */
+  --code-size: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+#app {
+  height: 100%;
+}
+
+/* ---- Theme palettes ---- */
+
+body.light {
+  --bg: #f0f0f0;
+  --fg: #000000;
+  --panel-bg: #f0f0f0;
+  --input-bg: #ffffff;
+  --input-fg: #000000;
+  --border: #c0c0c0;
+  --btn-bg: #e0e0e0;
+  --btn-hover: #d0d0d0;
+  --btn-disabled-bg: #f0f0f0;
+  --btn-disabled-fg: #b0b0b0;
+  --menu-hover: #d0d0d0;
+  --splitter: #c0c0c0;
+  --editor-bg: #ffffff;
+  --editor-fg: #000000;
+  --scroll-track: #e8e8e8;
+  --scroll-handle: #909090;
+  --gutter-author-bg: #f6f6f6;
+  --gutter-lineno-bg: #f0f0f0;
+  --gutter-text: #3c3c3c;
+  --gutter-lineno-text: #787878;
+  --gutter-sep: #c8c8c8;
+  --slider-groove: #c0c0c0;
+  --slider-accent: #5b8bd0;
+  --tick: #999999;
+  --wrap-indicator: #c05000;
+}
+
+body.dark {
+  --bg: #2b2b2b;
+  --fg: #dcdcdc;
+  --panel-bg: #2b2b2b;
+  --input-bg: #3c3c3c;
+  --input-fg: #dcdcdc;
+  --border: #555555;
+  --btn-bg: #3c3c3c;
+  --btn-hover: #4a4a4a;
+  --btn-disabled-bg: #2b2b2b;
+  --btn-disabled-fg: #555555;
+  --menu-hover: #3c3c3c;
+  --splitter: #555555;
+  --editor-bg: #1e1e1e;
+  --editor-fg: #dcdcdc;
+  --scroll-track: #2a2a2a;
+  --scroll-handle: #888888;
+  --gutter-author-bg: #252525;
+  --gutter-lineno-bg: #2a2a2a;
+  --gutter-text: #c8c8c8;
+  --gutter-lineno-text: #828282;
+  --gutter-sep: #3a3a3a;
+  --slider-groove: #3a3a3a;
+  --slider-accent: #7aa7e8;
+  --tick: #999999;
+  --wrap-indicator: #e08030;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* ---- Overall window layout ---- */
+
+.window {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.menu-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+  user-select: none;
+}
+
+.tab-strip {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+  user-select: none;
+  min-height: 30px;
+  overflow: hidden;
+}
+
+.tab-scroll-area {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  padding: 0 4px;
+}
+
+.tab-scroll-area::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-scroll-btn {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: var(--panel-bg);
+  color: var(--scroll-handle);
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-scroll-btn:hover {
+  background: var(--btn-hover);
+}
+
+.tab-strip.overflowing .tab-scroll-btn {
+  display: flex;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  margin-top: 2px;
+  white-space: nowrap;
+  color: var(--fg);
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+.tab:hover {
+  opacity: 1;
+  background: var(--hover-bg, rgba(128, 128, 128, 0.1));
+}
+
+.tab.active {
+  opacity: 1;
+  background: var(--bg);
+  border-color: var(--border);
+  position: relative;
+}
+
+.tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--bg);
+}
+
+.tab-label {
+  pointer-events: none;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-close {
+  background: none;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.5;
+  border-radius: 3px;
+}
+
+.tab-close:hover {
+  opacity: 1;
+  background: rgba(128, 128, 128, 0.2);
+}
+
+.tab-add {
+  background: none;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 8px;
+  opacity: 0.5;
+  border-radius: 3px;
+  margin-left: 2px;
+}
+
+.tab-add:hover {
+  opacity: 1;
+  background: rgba(128, 128, 128, 0.2);
+}
+
+.tab-content-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu {
+  position: relative;
+}
+
+.menu > .menu-title {
+  padding: 3px 8px;
+  cursor: default;
+  border-radius: 3px;
+}
+
+.menu > .menu-title:hover,
+.menu.open > .menu-title {
+  background: var(--menu-hover);
+}
+
+.menu-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 100;
+  min-width: 320px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 4px 0;
+  display: none;
+}
+
+.menu.open .menu-dropdown {
+  display: block;
+}
+
+.menu-item {
+  padding: 5px 24px 5px 26px;
+  cursor: default;
+  white-space: nowrap;
+  position: relative;
+}
+
+.menu-item:hover {
+  background: var(--menu-hover);
+}
+
+/* Matches the disabled button colours. The click is ignored in makeItem. */
+.menu-item.disabled {
+  color: var(--btn-disabled-fg);
+}
+
+.menu-item.disabled:hover {
+  background: none;
+}
+
+/* Right-click context menu for the code view (Copy / Select All). Positioned
+   at the cursor via inline left/top; styled like the menu-bar dropdowns. */
+.context-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 140px;
+  background: var(--panel-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 4px 0;
+  user-select: none;
+}
+
+.context-menu-item {
+  padding: 5px 18px;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.context-menu-item:hover {
+  background: var(--menu-hover);
+}
+
+.menu-item.checkable::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.menu-item.checked::before {
+  content: "\2713";
+}
+
+.menu-item .shortcut {
+  color: var(--btn-disabled-fg);
+  margin-left: 24px;
+  float: right;
+}
+
+.menu-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.submenu {
+  position: relative;
+}
+
+.submenu > .submenu-title::after,
+.submenu.submenu-title::after {
+  content: "\25B6";
+  position: absolute;
+  right: 8px;
+  font-size: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.submenu-dropdown {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  min-width: 180px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 4px 0;
+}
+
+.submenu:hover .submenu-dropdown {
+  display: block;
+}
+
+.submenu.submenu-disabled > .submenu-title,
+.submenu.submenu-disabled.submenu-title {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.submenu.submenu-disabled .submenu-dropdown {
+  display: none !important;
+}
+
+.body-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 6px 8px 0 8px;
+  gap: 6px;
+}
+
+/* ---- Rows ---- */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.row label.field-label {
+  white-space: nowrap;
+}
+
+/* ---- Inputs ---- */
+
+input[type="text"],
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--input-bg);
+  color: var(--input-fg);
+  border: 1px solid var(--border);
+  padding: 3px 5px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  border-radius: 2px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpolygon points='0,0 8,0 4,5' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 5px center;
+  padding-right: 18px;
+}
+
+input[type="text"] {
+  background-image: none;
+  padding-right: 5px;
+}
+
+input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+input[type="text"].repo-shrink {
+  flex: 0 0 auto;
+  padding-right: 1px;
+}
+
+button {
+  background: var(--btn-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--btn-hover);
+}
+
+button:disabled {
+  background: var(--btn-disabled-bg);
+  color: var(--btn-disabled-fg);
+  border-color: var(--border);
+  cursor: default;
+}
+
+.icon-btn {
+  width: 30px;
+  padding: 3px 0;
+  text-align: center;
+}
+
+.narrow-btn {
+  width: 24px;
+  padding: 3px 0;
+  text-align: center;
+}
+
+/* ---- Slider ---- */
+
+.slider-stack {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.slider-wrap {
+  position: relative;
+  height: 24px;
+  display: flex;
+  align-items: center;
+}
+.slider-wrap.hidden {
+  display: none;
+}
+
+.rev-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 12px;
+  background: var(--slider-groove);
+  border-radius: 6px;
+  outline: none;
+  margin: 0;
+}
+
+.rev-slider:disabled {
+  opacity: 0.5;
+}
+
+/* Separate button for the virtual "M" (uncommitted changes) revision, sitting
+   to the right of the slider. Kept out of the flow (hidden) when absent. */
+.m-rev-btn {
+  min-width: 24px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 4px;
+  flex: 0 0 auto;
+}
+.m-rev-btn.active {
+  background: var(--slider-accent);
+  color: #fff;
+}
+.m-rev-btn:hover:not(:disabled) {
+  background: var(--btn-bg);
+}
+.m-rev-btn.active:hover:not(:disabled) {
+  background: var(--slider-accent);
+}
+.m-rev-btn.hidden {
+  display: none;
+}
+/* Suppressed while range coloring is active (its wrap is hidden anyway, but the
+   M button is a flex child of that wrap, so this keeps it out on any path). */
+.m-rev-btn.range-hidden {
+  display: none;
+}
+
+/* Reserve the M button's footprint on the labels row so tick coordinates
+   (computed from the labels' clientWidth) stay aligned with the slider track,
+   which the flex M button shortens by the same amount. margin (not padding)
+   narrows clientWidth so the linear tick mapping matches the shortened track.
+   Only applied when the M button is shown (i.e. the wrap contains it). */
+.slider-wrap:has(.m-rev-btn:not(.hidden)) ~ .slider-labels {
+  margin-right: 28px;
+}
+
+.rev-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 36px;
+  height: 20px;
+  background: var(--slider-accent);
+  border-radius: 4px;
+  cursor: pointer;
+  border: none;
+}
+
+.rev-slider::-moz-range-thumb {
+  width: 36px;
+  height: 20px;
+  background: var(--slider-accent);
+  border-radius: 4px;
+  cursor: pointer;
+  border: none;
+}
+
+/* Bar through the tick-mark area marking the revisions across which the selected
+   chunk stays unchanged. Lives inside .slider-labels and shares the same
+   thumb-centered tick geometry, so it aligns with the tick marks (top: 0,
+   height: 4px) rather than overlaying the slider thumb. */
+.slider-chunk-highlight {
+  position: absolute;
+  height: 4px;
+  top: 0;
+  background: rgba(74, 158, 255, 0.35);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 1;
+}
+.slider-chunk-highlight.hidden {
+  display: none;
+}
+
+.slider-labels {
+  position: relative;
+  height: 20px;
+  font-size: 10px;
+  color: var(--fg);
+  user-select: none;
+}
+.slider-labels.hidden {
+  display: none;
+}
+
+.slider-labels .tick {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 4px;
+  background: var(--tick);
+  transform: translateX(-50%);
+}
+
+.slider-labels .tick-label {
+  position: absolute;
+  top: 5px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+/* ---- Dual-handle range slider (range coloring mode) ---- */
+
+/* Two overlapping range inputs share this track. Each input is transparent so
+   only its thumb is visible; pointer-events are disabled on the input body and
+   re-enabled on the thumbs so both handles stay draggable despite the overlap. */
+.range-slider-wrap {
+  position: relative;
+  height: 24px;
+  display: flex;
+  align-items: center;
+}
+.range-slider-wrap.hidden {
+  display: none;
+}
+
+.range-slider-wrap .range-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 12px;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  outline: none;
+}
+
+/* The groove is drawn once, under both inputs, via the wrap so the two
+   transparent inputs don't stack two grooves. */
+.range-slider-wrap::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--slider-groove);
+  border-radius: 6px;
+}
+
+/* Highlighted span between the two handles. */
+.range-slider-fill {
+  position: absolute;
+  height: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(74, 158, 255, 0.35);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.range-slider-wrap .range-handle::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 18px;
+  height: 20px;
+  background: var(--slider-accent);
+  border: 2px solid var(--bg, #fff);
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+}
+.range-slider-wrap .range-handle::-moz-range-thumb {
+  pointer-events: auto;
+  width: 18px;
+  height: 20px;
+  background: var(--slider-accent);
+  border: 2px solid var(--bg, #fff);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.range-slider-wrap .range-handle::-moz-range-track {
+  background: transparent;
+}
+
+/* Distinguish the start handle from the end handle. */
+.range-slider-wrap .range-start::-webkit-slider-thumb {
+  border-radius: 4px 0 0 4px;
+}
+.range-slider-wrap .range-end::-webkit-slider-thumb {
+  border-radius: 0 4px 4px 0;
+}
+
+.range-slider-wrap .range-handle:disabled {
+  opacity: 0.5;
+}
+
+
+.nav-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+/* Direct-jump revision input, between the ◄ / ► buttons. The wrapper carries
+   the border/background so the input and its inline mode dropdown read as a
+   single field. Compact: no grow, so the ◄ / ► buttons stay flanking it.
+   position: relative anchors the absolutely-positioned dropdown menu. */
+.rev-input-wrapper {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--input-bg);
+}
+
+/* The selector must be at least as specific as the global `input[type="text"]`
+   rule (which sets flex: 1 1 auto and min-width: 0), so it's qualified with
+   input[type="text"]; otherwise that rule wins and the field stretches. The
+   width is set from JS to fit the max revision's digit count / 8-char hash. */
+input[type="text"].rev-input {
+  flex: 0 0 auto;
+  min-width: 10ch;
+  text-align: center;
+  font-size: 12px;
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
+}
+
+input[type="text"].rev-input:focus {
+  outline: none;
+}
+
+.rev-input-wrapper:focus-within {
+  border-color: var(--highlight);
+}
+
+/* Inline mode dropdown on the right edge of the field. A small ▾ button opens
+   a custom popup (below) instead of a native <select> so it renders
+   consistently across the desktop/VS Code/VS webviews. */
+.rev-dropdown-btn {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--border);
+  color: var(--gutter-lineno-text);
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.rev-dropdown-btn:hover:not(:disabled) {
+  color: var(--fg);
+}
+
+.rev-dropdown-btn:disabled {
+  cursor: default;
+  color: var(--btn-disabled-fg);
+}
+
+.rev-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  margin-top: 2px;
+  min-width: 80px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.rev-dropdown-item {
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.rev-dropdown-item:hover {
+  background: var(--menu-hover);
+}
+
+.rev-dropdown-item.active {
+  font-weight: bold;
+}
+
+/* ---- Mode row ---- */
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.wrap-indicator {
+  color: var(--wrap-indicator);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.legend {
+  white-space: nowrap;
+  user-select: text;
+}
+
+.legend .swatch {
+  display: inline-block;
+  width: 20px;
+  height: 12px;
+  vertical-align: middle;
+  margin: 0 2px;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+}
+
+.legend .swatch-sm {
+  width: 14px;
+}
+
+/* ---- Info bar ---- */
+
+.info-bar {
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: text;
+  flex: 0 0 auto;
+}
+
+.repo-file-label {
+  font-size: 13px;
+  color: var(--btn-disabled-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 0;
+  font-family: var(--font-ui);
+}
+.repo-file-label:empty {
+  display: none;
+}
+
+.mode-toggle {
+  padding: 1px 18px 1px 4px;
+  font-size: 12px;
+  cursor: pointer;
+  background-color: var(--input-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  margin-left: 4px;
+}
+
+/* ---- File-browser tray ---- */
+
+.tree-tray {
+  flex: 0 0 auto;
+}
+.tree-tray.tree-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.tree-tray-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.tree-tray-header:hover {
+  background: var(--btn-hover);
+}
+
+.tree-tray-arrow {
+  font-size: 10px;
+  width: 14px;
+}
+
+.tree-tray-label {
+  font-weight: 500;
+}
+
+.tree-browse-btn {
+  padding: 1px 8px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.tree-panel {
+  display: flex;
+  flex-direction: column;
+  height: 300px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-top: none;
+  background: var(--editor-bg);
+}
+
+.tree-panel.hidden {
+  display: none;
+}
+
+.tree-resize-handle {
+  height: 4px;
+  background: var(--splitter);
+  cursor: row-resize;
+  flex: 0 0 auto;
+}
+
+.tree-panel.hidden + .tree-resize-handle {
+  display: none;
+}
+
+.tree-filter-row {
+  display: flex;
+  flex: 0 0 auto;
+  z-index: 1;
+  background: var(--input-bg);
+  border-bottom: 1px solid var(--border);
+}
+.tree-filter {
+  flex: 1;
+  padding: 4px 8px;
+  background: var(--input-bg);
+  color: var(--input-fg);
+  border: none;
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+.tree-filter:focus {
+  outline: none;
+}
+.tree-filter-clear {
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  padding: 0 8px;
+  font-size: 16px;
+  line-height: 1;
+}
+.tree-filter-clear:hover:not(:disabled) {
+  color: var(--slider-accent);
+}
+.tree-filter-clear:disabled {
+  color: var(--btn-disabled-fg);
+  opacity: 0.3;
+  cursor: default;
+}
+
+.tree-content,
+.tree-filter-overlay {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tree-content.hidden,
+.tree-filter-overlay.hidden {
+  display: none;
+}
+
+.tree-node {
+  padding: 2px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--editor-fg);
+  user-select: none;
+}
+
+.tree-node:hover {
+  background: var(--menu-hover);
+}
+
+.tree-node.selected {
+  background: var(--slider-accent);
+  color: #fff;
+}
+
+.tree-node.dir {
+  font-weight: 500;
+}
+
+.tree-deleted {
+  opacity: 0.6;
+}
+.tree-deleted > .tree-file-name {
+  text-decoration: line-through;
+}
+.tree-modified {
+  font-style: italic;
+}
+/* Combined parenthetical badge: one wrapper holding any of the sparse/deleted/
+   modified/opened labels, separated by commas, each label keeping its own
+   color. The wrapper carries the shared font size, italics, and left margin so
+   the inner label spans only need to set color. */
+.tree-combined-badge {
+  font-style: italic;
+  font-size: 10px;
+  margin-left: 4px;
+}
+.tree-badge-paren,
+.tree-badge-sep {
+  opacity: 0.6;
+}
+.tree-modified-badge {
+  color: var(--wrap-indicator);
+}
+.tree-deleted-badge {
+  text-decoration: none;
+  opacity: 0.8;
+}
+.tree-sparse {
+  opacity: 0.5;
+}
+.tree-sparse-badge {
+  color: #c0a060;
+}
+.tree-node.selected .tree-sparse-badge {
+  color: #e0c880;
+}
+.tree-submodule-badge {
+  font-style: italic;
+  font-size: 10px;
+  color: #9c7cdb;
+  margin-left: 4px;
+}
+.tree-node.selected .tree-submodule-badge {
+  color: #c4b0f0;
+}
+.tree-rev-count {
+  font-size: 10px;
+  opacity: 0.5;
+  margin-left: 6px;
+}
+.tree-opened-badge {
+  color: #4caf50;
+}
+.tree-node.selected .tree-opened-badge {
+  color: #b9f6ca;
+}
+
+.tree-dir-arrow {
+  display: inline-block;
+  width: 14px;
+  font-size: 10px;
+}
+
+.tree-node.tree-hidden {
+  display: none;
+}
+
+.tree-empty {
+  padding: 8px;
+  opacity: 0.6;
+  font-style: italic;
+  font-size: 12px;
+}
+
+.tree-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--slider-accent);
+  border-radius: 50%;
+  animation: tree-spin 0.8s linear infinite;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+@keyframes tree-spin {
+  to { transform: rotate(360deg); }
+}
+.tree-spinner.hidden {
+  display: none;
+}
+
+.tree-loading-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  opacity: 0.6;
+}
+.tree-loading-text {
+  font-style: italic;
+}
+
+/* ---- Search bar ---- */
+
+.search-row {
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  background: var(--panel-bg);
+}
+
+.search-row.hidden {
+  display: none;
+}
+
+.search-count {
+  white-space: nowrap;
+  min-width: 70px;
+}
+
+/* Toggle button reflects the active state like the mode/rev controls. */
+.history-toggle-btn.active {
+  background: var(--slider-accent);
+  color: #fff;
+}
+
+/* No generic .hidden rule exists, so each hideable element carries its own. */
+.history-search-btn.hidden {
+  display: none;
+}
+
+/* ---- History search tray ---- */
+
+/* `flex: 0 0 auto` is load-bearing for the same reason as .ref-banner: the
+   body area is a flex column and the tray must keep its height rather than be
+   squeezed. It sits after the code/details splitter, so it takes its height
+   from the code view above it and never overlaps the status bar below. */
+.history-tray {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  height: 200px;
+  min-height: 80px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  background: var(--panel-bg);
+}
+
+.history-tray.hidden {
+  display: none;
+}
+
+/* Slide up only when the mode is switched on, not every time the tab holding
+   an open tray is re-attached. */
+.history-tray.opening {
+  animation: history-tray-in 140ms ease-out;
+}
+
+@keyframes history-tray-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 2px 4px;
+}
+
+.history-title {
+  font-weight: 600;
+}
+
+/* Same active treatment as the follow-renames and lifetimes toggles. */
+.history-changes-btn.active {
+  background: var(--slider-accent);
+  color: #fff;
+}
+
+.history-empty.hidden {
+  display: none;
+}
+
+.history-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.85;
+}
+
+/* Virtual scroll, as in .code-lines: rows are absolutely positioned inside a
+   relatively-positioned container whose height JS sets to the full list. */
+.history-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: var(--editor-bg);
+  color: var(--editor-fg);
+  font-family: var(--font-mono);
+  font-size: var(--code-size);
+}
+
+.history-lines {
+  position: relative;
+}
+
+.history-row {
+  position: absolute;
+  left: 0;
+  height: calc(var(--code-size) * 1.35);
+  line-height: calc(var(--code-size) * 1.35);
+  padding: 0 8px;
+  white-space: pre;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
+  cursor: default;
+}
+
+/* An outline rather than a background, which added/removed rows set inline. */
+.history-row:hover {
+  outline: 1px solid var(--slider-accent);
+  outline-offset: -1px;
+}
+
+/* Same treatment as the Diff view's removed rows, on the text only. */
+.history-row.removed .history-text {
+  text-decoration: line-through;
+}
+
+.history-marker {
+  display: inline-block;
+  width: 2ch;
+  font-weight: 600;
+}
+
+/* A removed line's number is from the previous revision. */
+.history-was {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+/* An inset shadow rather than a border, which would eat into the fixed row
+   height the virtual scroll positions every row by. */
+.history-rev {
+  background: var(--gutter-author-bg);
+  box-shadow: inset 0 1px 0 var(--gutter-sep);
+}
+
+.history-rev-num {
+  font-weight: 600;
+}
+
+.history-count,
+.history-path {
+  opacity: 0.75;
+}
+
+.history-path {
+  font-style: italic;
+}
+
+.history-hit {
+  padding-left: 16px;
+}
+
+.history-lineno {
+  display: inline-block;
+  min-width: 6ch;
+  margin-right: 2ch;
+  text-align: right;
+  color: var(--gutter-lineno-text);
+}
+
+/* Same amber as the in-revision .search-hit outline. */
+.history-mark {
+  background: #ffb000;
+  color: #000;
+  border-radius: 2px;
+}
+
+/* ---- Splitter (vertical: code over details) ---- */
+
+.v-splitter {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.splitter-handle {
+  flex: 0 0 auto;
+  background: var(--splitter);
+  cursor: row-resize;
+}
+
+.splitter-handle.horizontal {
+  height: 4px;
+}
+
+.splitter-handle.vertical {
+  width: 4px;
+  cursor: col-resize;
+}
+
+/* ---- Code view ---- */
+
+.code-area {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  background: var(--editor-bg);
+  color: var(--editor-fg);
+  overflow: auto;
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: var(--code-size);
+  line-height: 1.35;
+}
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--editor-bg);
+  color: var(--editor-fg);
+  font-size: 1.5em;
+  z-index: 100;
+  opacity: 0.95;
+  overflow: hidden;
+  pointer-events: all;
+}
+.loading-overlay.hidden {
+  display: none;
+}
+
+/* Custom scrollbars. */
+.code-area::-webkit-scrollbar,
+.detail-pane::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+.code-area::-webkit-scrollbar-track,
+.detail-pane::-webkit-scrollbar-track {
+  background: var(--scroll-track);
+}
+
+.code-area::-webkit-scrollbar-thumb,
+.detail-pane::-webkit-scrollbar-thumb {
+  background: var(--scroll-handle);
+  border-radius: 3px;
+  min-height: 20px;
+}
+
+/* Single arrow button per scrollbar end for line-by-line scrolling. Hide the
+   second button in each pair so only one arrow shows at each end. */
+.code-area::-webkit-scrollbar-button {
+  background: var(--scroll-track);
+  display: block;
+}
+
+.code-area::-webkit-scrollbar-button:start:increment,
+.code-area::-webkit-scrollbar-button:end:decrement {
+  display: none;
+}
+
+.code-area::-webkit-scrollbar-button:hover {
+  background: var(--scroll-handle);
+}
+
+.code-area::-webkit-scrollbar-button:vertical {
+  height: 14px;
+}
+
+.code-area::-webkit-scrollbar-button:horizontal {
+  width: 14px;
+}
+
+.code-area::-webkit-scrollbar-button:vertical:decrement {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpolygon points='5,2 9,8 1,8' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 10px;
+}
+
+.code-area::-webkit-scrollbar-button:vertical:increment {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpolygon points='5,8 9,2 1,2' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 10px;
+}
+
+.code-area::-webkit-scrollbar-button:horizontal:decrement {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpolygon points='2,5 8,1 8,9' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 10px;
+}
+
+.code-area::-webkit-scrollbar-button:horizontal:increment {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpolygon points='8,5 2,1 2,9' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 10px;
+}
+
+/* At least the viewport width (so short files fill it and row backgrounds span
+   the full width) but grows to max-content for long lines to trigger the
+   horizontal scrollbar. This is what makes .code-lines / .code-line percentage
+   widths resolve against the full viewport rather than the (narrower) content. */
+.code-inner {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  min-height: min-content;
+}
+
+/* Gutter: author column + line-number column. Sticky at left:0 keeps it
+   pinned horizontally while it scrolls vertically with the code lines inside
+   the shared .code-area scroll container. It must NOT clip its own height,
+   so no overflow here; the parent .code-area handles vertical scrolling. */
+.gutter {
+  flex: 0 0 auto;
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  user-select: none;
+  font-size: calc(var(--code-size) - 1px);
+}
+
+/* Author/line-number columns. Their cells are absolutely positioned for
+   virtual scrolling (top = row * lineH), so the columns are positioning
+   contexts with an explicit height set by JS to span the full document. */
+.gutter-author,
+.gutter-lineno {
+  position: relative;
+}
+
+/* Author column: fixed to the JS-set inline width (the resizable part). No
+   `overflow: hidden` here: as a stretched flex item that capped the column's
+   height at the visible flex line; long labels are clipped per-cell instead
+   (.gutter-cell has overflow:hidden + nowrap). */
+.gutter-author {
+  color: var(--gutter-text);
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+/* Line-number column: fixed width, unaffected by the resize handle. */
+.gutter-lineno {
+  color: var(--gutter-lineno-text);
+  border-left: 1px solid var(--gutter-sep);
+  text-align: right;
+  flex: 0 0 auto;
+  width: 50px;
+}
+
+/* Column background colors live on the cells, not the containers. The flex
+   containers' rendered height was capped at the first screenful, so a
+   container background stopped there while the cells (which set their own
+   height) kept going. Per-cell backgrounds travel with every row for the
+   full code height. JS (applyGutterShading) sets an inline background for
+   diff/blame/selection rows, which correctly overrides these defaults;
+   uncolored rows fall back to the gray column colors here. */
+.gutter-author .gutter-cell {
+  background: var(--gutter-author-bg);
+}
+
+.gutter-lineno .gutter-cell {
+  background: var(--gutter-lineno-bg);
+}
+
+/* Drag handle to resize the author column. A flex child sitting between the
+   author column and the line-number column; it stretches to the gutter's full
+   height (align-items:stretch) so it's grabbable at any scroll position and
+   resizes only the author column to its left. */
+.gutter-resize-handle {
+  flex: 0 0 5px;
+  cursor: col-resize;
+  background: var(--gutter-sep);
+}
+
+.gutter-resize-handle:hover {
+  background: var(--slider-accent);
+}
+
+.gutter-cell {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: calc(var(--code-size) * 1.35);
+  line-height: calc(var(--code-size) * 1.35);
+  padding: 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+
+.gutter-lineno .gutter-cell {
+  padding: 0 6px 0 6px;
+}
+
+/* Lifetime column: a fixed-width track between the blame label and line
+   numbers. Each chunk draws one horizontal bar spanning the revisions it has
+   survived; a dotted vertical cursor marks the current revision. Like the other
+   columns it is a positioning context sized to the full document height. */
+.gutter-lifetime-col {
+  position: relative;
+  flex: 0 0 auto;
+  border-left: 1px solid var(--gutter-sep);
+  background: var(--gutter-lineno-bg);
+  overflow: hidden;
+}
+
+.gutter-lifetime-cell {
+  padding: 0;
+  overflow: visible;
+  background: var(--gutter-lineno-bg);
+}
+
+/* One tall bar per chunk, spanning its rows. Height and vertical inset are set
+   inline (chunk row count * line height, minus a small gap so adjacent chunks
+   read apart). The bar color is intentionally theme-neutral (never age/author)
+   so the chunk's age/author shading behind it in the gutter cell stays visible. */
+.gutter-lifetime-bar {
+  position: absolute;
+  top: 0;
+  background: rgba(80, 80, 80, 0.2);
+  border: 1px solid rgba(80, 80, 80, 0.4);
+  border-radius: 2px;
+  min-width: 2px;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+body.dark .gutter-lifetime-bar {
+  background: rgba(200, 200, 200, 0.3);
+  border-color: rgba(200, 200, 200, 0.5);
+}
+
+/* A deleted line's bar reads distinctly: it ends before the current revision
+   (the line is being removed here) so it is tinted red and dashed to echo the
+   red strikethrough of the removed code lines. */
+.gutter-lifetime-bar.deleted {
+  background: rgba(200, 70, 70, 0.18);
+  border: 1px dashed rgba(200, 70, 70, 0.55);
+}
+
+body.dark .gutter-lifetime-bar.deleted {
+  background: rgba(230, 90, 90, 0.22);
+  border-color: rgba(230, 110, 110, 0.6);
+}
+
+.gutter-lifetime-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  border-left: 1px dotted var(--gutter-lineno-text);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Toggle button reflects the active state like the mode/rev controls. */
+.lifetimes-btn.active {
+  background: var(--slider-accent);
+  color: #fff;
+}
+
+.follow-renames-btn {
+  margin-left: 4px;
+}
+
+.follow-renames-btn svg {
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+}
+
+.follow-renames-btn.active {
+  background: var(--slider-accent);
+  color: #fff;
+}
+
+.tick.segment-boundary {
+  width: 2px !important;
+  height: 10px !important;
+  background: var(--slider-accent) !important;
+  opacity: 0.7;
+}
+
+/* Code lines. */
+/* Size to the widest line (so long lines scroll horizontally) but at least the
+   full viewport width, so every .code-line can stretch to fill it. */
+/* Virtual scroll: code lines are absolutely positioned (top = row * lineH)
+   inside this relatively-positioned container, whose height is set by JS to the
+   full document height. Only the rows in the viewport (plus a buffer) exist in
+   the DOM at any time. */
+.code-lines {
+  position: relative;
+  flex: 1 1 auto;
+  white-space: pre;
+}
+
+/* Each row is absolutely positioned at its computed top. width:max-content lets
+   a long line extend past the viewport (driving the horizontal scrollbar via
+   the parent's scroll overflow) while min-width:100% makes short rows still span
+   the full width so diff/blame/selection backgrounds are uniform. */
+.code-line {
+  position: absolute;
+  left: 0;
+  height: calc(var(--code-size) * 1.35);
+  line-height: calc(var(--code-size) * 1.35);
+  padding: 0 8px;
+  white-space: pre;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+
+.code-line.removed {
+  text-decoration: line-through;
+}
+
+.code-line.selected,
+.gutter-cell.selected {
+  /* set inline via JS to the current-line color */
+}
+
+/* Line mode: a single anchored row. Background is set inline (same current-line
+   color as chunk selection); a left border distinguishes it from a chunk. */
+.code-line.line-selected {
+  box-shadow: inset 2px 0 0 0 var(--slider-accent, #5b8bd0);
+}
+
+.placeholder {
+  padding: 12px;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.code-line.search-hit {
+  outline: 2px solid #ffb000;
+  outline-offset: -2px;
+}
+
+/* ---- Detail panes ---- */
+
+.detail-splitter {
+  display: flex;
+  flex: 0 0 auto;
+  height: 160px;
+  min-height: 60px;
+}
+
+.detail-splitter.hidden {
+  display: none;
+}
+
+.detail-pane {
+  flex: 1 1 50%;
+  min-width: 0;
+  background: var(--editor-bg);
+  color: var(--editor-fg);
+  font-family: var(--font-mono);
+  font-size: var(--code-size);
+  white-space: pre-wrap;
+  overflow: auto;
+  padding: 6px 8px;
+}
+
+.detail-pane.hidden {
+  display: none;
+}
+
+.detail-pane .placeholder {
+  padding: 0;
+}
+
+.rev-link {
+  color: #5b8bd0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ---- Status bar ---- */
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 6px;
+  background: var(--panel-bg);
+  color: var(--fg);
+  border-top: 1px solid var(--border);
+}
+
+.status-msg {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Compact zoom in/out buttons in the status bar, left of the theme toggle. */
+.zoom-btn {
+  min-width: 22px;
+  padding: 1px 6px;
+  margin-left: 2px;
+  font-size: 14px;
+  line-height: 1.1;
+  text-align: center;
+  cursor: pointer;
+}
+
+/* Theme selector dropdown in the status bar (replaces the old ☀️/🌙 toggle). */
+.theme-combo {
+  margin-left: 6px;
+  padding: 1px 18px 1px 4px;
+  font-size: 12px;
+  max-width: 160px;
+  cursor: pointer;
+  background-color: var(--input-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+/* ---- highlight.js token overrides bind to theme via body class ---- */
+/* highlight.js themes are imported per-theme in main.ts by toggling a
+   stylesheet link; token colors come from those. We only ensure the code
+   background is transparent so our row backgrounds show through. */
+.code-lines .hljs {
+  background: transparent;
+  padding: 0;
+}
+
+/* ---- Shared modal chrome (About modal) ---- */
+.modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-dialog {
+  position: absolute;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  width: 600px;
+  min-width: 300px;
+  min-height: 200px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  color: var(--fg);
+  resize: both;
+  overflow: auto;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+  cursor: move;
+  user-select: none;
+}
+
+.modal-header h2,
+.modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--fg);
+}
+
+.modal-close:hover {
+  background: var(--btn-hover);
+  border-radius: 2px;
+}
+
+.modal-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.modal-footer button {
+  padding: 6px 16px;
+}
+
+/* About modal. */
+.about-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.about-modal.hidden {
+  display: none;
+}
+
+/* Ref switcher. Mirrors .about-modal: there is no generic `.hidden` rule in
+   this stylesheet -- every one is component-scoped -- so a modal container
+   needs its own hidden rule or it renders from startup. */
+/* Always occupies its row. A fixed line-height plus padding keeps the height
+   constant whether it is showing a ref, the empty placeholder, or a long
+   branch name, so nothing below it ever shifts. */
+.ref-banner {
+  /* `flex: 0 0 auto` matches .row and is load-bearing: .body-area is a flex
+     column, so without it this is the only shrinkable child and it gets
+     squeezed to nothing once the tree panel or the scrubber compete for
+     space -- which reads as "the label never appeared". */
+  flex: 0 0 auto;
+  text-align: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 16px;
+  min-height: 16px;
+  box-sizing: content-box;
+  color: var(--fg-dim, var(--fg));
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Deliberately not button-styled: no border, background or weight change.
+   The only hover cue is the underline, so it still reads as a label. */
+.ref-banner:hover {
+  text-decoration: underline;
+  opacity: 1;
+}
+
+/* Nothing open: inert, and no affordance to click. */
+.ref-banner.is-empty {
+  cursor: default;
+}
+
+.ref-banner.is-empty:hover {
+  text-decoration: none;
+  opacity: 0.85;
+}
+
+/* Error sits left of the buttons; the footer is otherwise right-aligned. */
+.ref-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ref-error {
+  margin-right: auto;
+  color: #d64040;
+  font-size: 12px;
+}
+
+.ref-error.hidden {
+  display: none;
+}
+
+.ref-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.ref-modal.hidden {
+  display: none;
+}
+
+.ref-dialog {
+  width: 440px;
+  min-width: 320px;
+  min-height: 0;
+}
+
+/* Anchors the suggestion list. left:0/right:0 on the list then makes it
+   exactly the field's width, which a native datalist popup would not do. */
+.ref-input-wrap {
+  position: relative;
+  align-self: stretch;
+  margin-top: 10px;
+}
+
+.ref-suggest {
+  /* Fixed, and a sibling of the dialog rather than a descendant of the
+     scrolling body: nothing clips it, so the dialog never has to be resized
+     to see the list. Positioned from the field's rect at open time. */
+  position: fixed;
+  z-index: 1001;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 3px 3px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.ref-suggest.hidden {
+  display: none;
+}
+
+.ref-suggest-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.ref-suggest-item:hover,
+.ref-suggest-item.active {
+  background: var(--accent, rgba(255, 255, 255, 0.12));
+}
+
+.ref-suggest-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ref-suggest-kind {
+  flex: 0 0 auto;
+  opacity: 0.6;
+  font-size: 11px;
+}
+
+.ref-input {
+  width: 100%;
+  min-width: 0;
+  display: block;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  background: var(--input-bg, var(--panel-bg));
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+}
+
+.about-dialog {
+  width: 360px;
+  min-width: 280px;
+  min-height: auto;
+  resize: none;
+}
+
+.about-body {
+  text-align: center;
+  gap: 6px;
+}
+
+.about-app-name {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.about-version {
+  font-size: 12px;
+  color: var(--gutter-lineno-text);
+}
+
+.about-author {
+  font-size: 13px;
+  margin-top: 8px;
+  color: var(--gutter-text);
+}

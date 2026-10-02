@@ -1,0 +1,23 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+
+# Node
+node_modules/
+
+# Frontend bundles (tauri/ has its own .gitignore for dist-v1 and the crates)
+dist/
+dist_*/
+
+# Rust
+target/
+
+# .NET / VSIX
+[Bb]in/
+[Oo]bj/
+*.vsix
+
+# Editors
+.vscode/
+
+# Personal Claude Code instructions (per-checkout, never committed)
+CLAUDE.local.md
