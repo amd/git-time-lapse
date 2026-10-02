@@ -57,16 +57,19 @@ jobs:
         with:
           msbuild-architecture: x64
 
+      # Steps that call msbuild use pwsh: Git Bash does not find the MSBuild.exe
+      # that setup-msbuild adds to PATH, and fails with "msbuild: command not found".
       - name: Show toolchain and environment
+        shell: pwsh
         run: |
-          echo "::group::Versions"
-          echo "Node:     $(node --version)"
-          echo "npm:      $(npm --version)"
-          echo "MSBuild:  $(msbuild -version -nologo | tail -n1)"
-          echo ".NET SDKs:"
+          Write-Output "::group::Versions"
+          Write-Output "Node:     $(node --version)"
+          Write-Output "npm:      $(npm --version)"
+          Write-Output "MSBuild:  $(msbuild -version -nologo | Select-Object -Last 1)"
+          Write-Output ".NET SDKs:"
           dotnet --list-sdks
-          echo "::endgroup::"
-          echo "Source commit embedded in the About box: $(git rev-parse --short HEAD)"
+          Write-Output "::endgroup::"
+          Write-Output "Source commit embedded in the About box: $(git rev-parse --short HEAD)"
 
       - name: Preflight checks
         run: |
@@ -102,16 +105,20 @@ jobs:
       # imported from the restored Microsoft.VSSDK.BuildTools package, so they
       # only exist once restore has finished.
       - name: Restore NuGet packages
+        shell: pwsh
         run: |
-          msbuild "$PROJECT" -nologo -t:Restore -v:minimal -bl:msbuild-restore.binlog || {
-            echo "::error title=NuGet restore failed::Could not restore the packages in GitTimeLapseExtension.csproj. Check the PackageReference versions exist on nuget.org. The binary log is uploaded as 'msbuild-logs'."
+          msbuild $env:PROJECT -nologo -t:Restore -v:minimal '-bl:msbuild-restore.binlog'
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::error title=NuGet restore failed::Could not restore the packages in GitTimeLapseExtension.csproj. Check the PackageReference versions exist on nuget.org. The binary log is uploaded as 'msbuild-logs'."
             exit 1
           }
 
       - name: Build VSIX
+        shell: pwsh
         run: |
-          msbuild "$PROJECT" -nologo -t:Rebuild -p:Configuration=Release -v:normal -clp:Summary -bl:msbuild-build.binlog || {
-            echo "::error title=MSBuild failed::Search the log above for ': error'. MSB4057 (target 'GeneratePkgDef' does not exist) means the VSSDK targets were not imported, usually because restore did not run first; VSSDK1xxx errors come from the VSIX/pkgdef tooling. Open the 'msbuild-logs' artifact in the MSBuild Structured Log Viewer for full detail."
+          msbuild $env:PROJECT -nologo -t:Rebuild -p:Configuration=Release -v:normal -clp:Summary '-bl:msbuild-build.binlog'
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::error title=MSBuild failed::Search the log above for ': error'. MSB4057 (target 'GeneratePkgDef' does not exist) means the VSSDK targets were not imported, usually because restore did not run first; VSSDK1xxx errors come from the VSIX/pkgdef tooling. Open the 'msbuild-logs' artifact in the MSBuild Structured Log Viewer for full detail."
             exit 1
           }
 
