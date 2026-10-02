@@ -1,0 +1,335 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+name: Tauri desktop
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "shared/**"
+      - "tauri/**"
+      - ".github/workflows/tauri.yml"
+      - ".github/scripts/**"
+  pull_request:
+    paths:
+      - "shared/**"
+      - "tauri/**"
+      - ".github/workflows/tauri.yml"
+      - ".github/scripts/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: "22"
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+  # linuxdeploy (AppImage bundling) is itself an AppImage and needs FUSE 2 to
+  # run, which neither the hosted runners nor containers reliably provide.
+  APPIMAGE_EXTRACT_AND_RUN: "1"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  v2:
+    name: Tauri v2 (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-2025
+            artifact: git-time-lapse-tauri-v2-windows
+          - name: Linux
+            # The build host's glibc becomes the binary's floor; 22.04 gives
+            # 2.35. A newer image would silently raise it.
+            os: ubuntu-22.04
+            artifact: git-time-lapse-tauri-v2-linux
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Install Linux system packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev \
+            libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
+          || { echo "::error title=apt install failed::Could not install the Tauri v2 Linux prerequisites. If a package was not found, the runner image may have changed; compare against the list in AGENTS.md."; exit 1; }
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tauri/package-lock.json
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tauri/src-tauri -> target
+
+      - name: Show toolchain and environment
+        run: |
+          echo "::group::Versions"
+          echo "Runner:  ${{ matrix.os }} ($RUNNER_OS/$RUNNER_ARCH)"
+          echo "Node:    $(node --version)"
+          echo "npm:     $(npm --version)"
+          rustc -vV
+          cargo --version
+          git --version
+          if [ "$RUNNER_OS" = "Linux" ]; then ldd --version | head -n1; fi
+          echo "::endgroup::"
+          echo "Source commit embedded in the About box: $(git rev-parse --short HEAD)"
+
+      - name: Preflight checks (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          fail=0
+          for mod in webkit2gtk-4.1 libsoup-3.0 gtk+-3.0 glib-2.0 librsvg-2.0 openssl; do
+            if v=$(pkg-config --modversion "$mod" 2>/dev/null); then
+              echo "pkg-config $mod: $v"
+            else
+              echo "::error title=Missing system library::pkg-config cannot find '$mod'. The apt install step did not provide it."
+              fail=1
+            fi
+          done
+          if ! pkg-config --atleast-version=2.70 glib-2.0; then
+            echo "::error title=glib too old::Tauri v2 needs glib >= 2.70, found $(pkg-config --modversion glib-2.0). Use Ubuntu 22.04 or newer; RHEL8/9 must use the v1 shell."
+            fail=1
+          fi
+          for tool in patchelf file wget objdump; do
+            command -v "$tool" >/dev/null || { echo "::error title=Missing tool::'$tool' is not on PATH; the bundler needs it."; fail=1; }
+          done
+          exit "$fail"
+
+      - name: Preflight checks (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          # WiX 3's light.exe, which Tauri runs to produce the MSI, depends on
+          # the VBSCRIPT optional Windows feature.
+          if [ -f /c/Windows/System32/vbscript.dll ]; then
+            echo "VBScript: present"
+          else
+            echo "::warning title=VBScript not found::vbscript.dll is missing, so MSI bundling (WiX light.exe) is likely to fail. Enable the VBSCRIPT optional feature on the runner image."
+          fi
+
+      - name: Install npm dependencies
+        working-directory: tauri
+        run: |
+          npm ci || { echo "::error title=npm ci failed::Either tauri/package-lock.json is out of sync with tauri/package.json (run 'npm install' in tauri/ and commit the lockfile) or the npm registry was unreachable."; exit 1; }
+
+      - name: Type-check (tsconfig.json)
+        working-directory: tauri
+        run: |
+          npx tsc --noEmit || { echo "::error title=TypeScript errors::The v2 shell or shared/ code does not type-check under tauri/tsconfig.json. See the errors above."; exit 1; }
+
+      - name: Verify Cargo.lock and fetch crates
+        run: |
+          cargo fetch --locked --manifest-path tauri/src-tauri/Cargo.toml \
+          || { echo "::error title=Cargo.lock out of date::tauri/src-tauri/Cargo.lock does not match Cargo.toml (or crates.io was unreachable). Run 'cargo update' (or 'cargo generate-lockfile') in tauri/src-tauri and commit the lockfile."; exit 1; }
+
+      - name: Tauri environment report
+        working-directory: tauri
+        continue-on-error: true
+        run: npx tauri info
+
+      - name: Build and bundle
+        working-directory: tauri
+        run: |
+          npx tauri build --verbose || {
+            echo "::error title=tauri build failed::Search the log above for the first 'error'. Rust compile errors look like 'error[E....]'; frontend failures come from 'npm run build:v2' (tsc + vite); bundler failures mention linuxdeploy/AppImage on Linux or light.exe/makensis on Windows."
+            exit 1
+          }
+
+      - name: Report glibc floor
+        if: runner.os == 'Linux'
+        run: |
+          bin=tauri/src-tauri/target/release/git-time-lapse
+          floor=$(objdump -T "$bin" | grep -oE 'GLIBC_[0-9]+(\.[0-9]+)+' | sed 's/GLIBC_//' | sort -uV | tail -n1)
+          echo "Highest GLIBC symbol version required by $bin: $floor"
+          echo "Tauri v2 Linux binary requires glibc >= **$floor**." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Collect artifacts (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          r=tauri/src-tauri/target/release
+          bash .github/scripts/collect-artifacts.sh artifacts \
+            "Portable EXE=$r/git-time-lapse.exe" \
+            "MSI installer=$r/bundle/msi/*.msi" \
+            "NSIS installer=$r/bundle/nsis/*.exe"
+
+      - name: Collect artifacts (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          r=tauri/src-tauri/target/release
+          bash .github/scripts/collect-artifacts.sh artifacts \
+            "Portable binary=$r/git-time-lapse" \
+            "Debian package=$r/bundle/deb/*.deb" \
+            "RPM package=$r/bundle/rpm/*.rpm" \
+            "AppImage=$r/bundle/appimage/*.AppImage"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: artifacts/
+          if-no-files-found: error
+
+  v1:
+    name: Tauri v1 (Linux, RHEL8-compatible)
+    runs-on: ubuntu-24.04
+    # Built inside an EL8 container so the binary keeps a glibc 2.28 floor and
+    # runs on RHEL8 and newer. Building on an Ubuntu runner would defeat the
+    # purpose of the v1 shell. rockylinux/rockylinux is the image Rocky
+    # publishes; the Docker Hub library/rockylinux image stopped at 8.9.
+    container: rockylinux/rockylinux:8
+    timeout-minutes: 60
+    steps:
+      # Installed before checkout so actions/checkout finds git and makes a real
+      # clone (with .git) instead of downloading a tarball.
+      - name: Install EL8 system packages
+        run: |
+          set -x
+          dnf install -y dnf-plugins-core epel-release
+          # EPEL and PowerTools are enabled so patchelf and any -devel
+          # dependency outside BaseOS/AppStream can resolve.
+          dnf config-manager --set-enabled powertools
+          dnf groupinstall -y "Development Tools"
+          dnf install -y \
+            git tar gzip xz which findutils \
+            gtk3-devel webkit2gtk3-devel libsoup-devel librsvg2-devel \
+            openssl-devel curl patchelf file wget \
+          || { set +x; echo "::error title=dnf install failed::Could not install the Tauri v1 EL8 prerequisites. A 'No match for argument' line above names the missing package; compare against the list in AGENTS.md."; exit 1; }
+
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Resolve source commit
+        run: |
+          # The workspace is owned by a different uid than the container's
+          # root user, so git refuses it without this.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          commit=$(git rev-parse --short HEAD) || { echo "::warning title=Commit unknown::git rev-parse failed inside the container; the About box will show 'unknown'."; exit 0; }
+          echo "SOURCE_COMMIT=$commit" >> "$GITHUB_ENV"
+          echo "Source commit embedded in the About box: $commit"
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tauri/package-lock.json
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tauri/src-tauri-v1 -> target
+
+      - name: Show toolchain and environment
+        run: |
+          echo "::group::Versions"
+          cat /etc/redhat-release
+          ldd --version | head -n1
+          echo "Node:    $(node --version)"
+          echo "npm:     $(npm --version)"
+          rustc -vV
+          cargo --version
+          gcc --version | head -n1
+          git --version
+          echo "::endgroup::"
+
+      - name: Preflight checks
+        run: |
+          fail=0
+          for mod in webkit2gtk-4.0 libsoup-2.4 gtk+-3.0 glib-2.0 librsvg-2.0 openssl; do
+            if v=$(pkg-config --modversion "$mod" 2>/dev/null); then
+              echo "pkg-config $mod: $v"
+            else
+              echo "::error title=Missing system library::pkg-config cannot find '$mod'. The dnf install step did not provide it."
+              fail=1
+            fi
+          done
+          # wget is not optional: Tauri v1's appimage.sh shells out to it.
+          for tool in gcc patchelf file wget objdump; do
+            command -v "$tool" >/dev/null || { echo "::error title=Missing tool::'$tool' is not on PATH; the build or bundler needs it."; fail=1; }
+          done
+          exit "$fail"
+
+      - name: Install npm dependencies
+        working-directory: tauri
+        run: |
+          npm ci || { echo "::error title=npm ci failed::Either tauri/package-lock.json is out of sync with tauri/package.json (run 'npm install' in tauri/ and commit the lockfile) or the npm registry was unreachable."; exit 1; }
+
+      - name: Type-check (tsconfig.v1.json)
+        working-directory: tauri
+        run: |
+          npx tsc --noEmit -p tsconfig.v1.json || { echo "::error title=TypeScript errors::The v1 shell or shared/ code does not type-check under tauri/tsconfig.v1.json. See the errors above."; exit 1; }
+
+      - name: Verify Cargo.lock and fetch crates
+        run: |
+          cargo fetch --locked --manifest-path tauri/src-tauri-v1/Cargo.toml \
+          || { echo "::error title=Cargo.lock out of date::tauri/src-tauri-v1/Cargo.lock does not match Cargo.toml (or crates.io was unreachable). Run 'cargo update' (or 'cargo generate-lockfile') in tauri/src-tauri-v1 and commit the lockfile."; exit 1; }
+
+      - name: Tauri environment report
+        working-directory: tauri
+        continue-on-error: true
+        run: npm run tauri:v1 -- info
+
+      - name: Build and bundle
+        working-directory: tauri
+        run: |
+          npm run tauri:v1 -- build --verbose || {
+            echo "::error title=tauri build failed::Search the log above for the first 'error'. Rust compile errors look like 'error[E....]'; frontend failures come from 'npm run build:v1' (tsc + vite); AppImage failures come from appimage.sh/linuxdeploy. A 'failed to rename' error after a clean compile means the [[bin]] name in src-tauri-v1/Cargo.toml no longer equals package.name."
+            exit 1
+          }
+
+      - name: Check glibc floor
+        run: |
+          # The binary is renamed to the kebab-cased productName, which embeds
+          # the version, so locate it by prefix.
+          bin=$(find tauri/src-tauri-v1/target/release -maxdepth 1 -type f -name 'git-time-lapse-view-v*' -perm -u+x | head -n1)
+          if [ -z "$bin" ]; then
+            echo "::error title=Binary not found::No git-time-lapse-view-v* executable in tauri/src-tauri-v1/target/release."
+            ls -la tauri/src-tauri-v1/target/release
+            exit 1
+          fi
+          floor=$(objdump -T "$bin" | grep -oE 'GLIBC_[0-9]+(\.[0-9]+)+' | sed 's/GLIBC_//' | sort -uV | tail -n1)
+          echo "Highest GLIBC symbol version required by $bin: $floor"
+          echo "Tauri v1 Linux binary requires glibc >= **$floor**." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$(printf '%s\n' 2.28 "$floor" | sort -V | tail -n1)" != "2.28" ]; then
+            echo "::error title=glibc floor too high::The v1 binary needs glibc $floor, but it must run on RHEL8 (glibc 2.28). It was not built against EL8's glibc; check the job's container image."
+            exit 1
+          fi
+
+      - name: Collect artifacts
+        run: |
+          r=tauri/src-tauri-v1/target/release
+          bash .github/scripts/collect-artifacts.sh artifacts \
+            "Portable binary=$r/git-time-lapse-view-v*" \
+            "Debian package=$r/bundle/deb/*.deb" \
+            "RPM package=$r/bundle/rpm/*.rpm" \
+            "AppImage=$r/bundle/appimage/*.AppImage"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: git-time-lapse-tauri-v1-linux-el8
+          path: artifacts/
+          if-no-files-found: error

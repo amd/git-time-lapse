@@ -1,0 +1,106 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+name: VS Code extension
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "shared/**"
+      - "vscode/**"
+      - ".github/workflows/vscode.yml"
+      - ".github/scripts/**"
+  pull_request:
+    paths:
+      - "shared/**"
+      - "vscode/**"
+      - ".github/workflows/vscode.yml"
+      - ".github/scripts/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # @vscode/vsce 4.x requires Node >= 22.
+  NODE_VERSION: "22"
+  VSCE_VERSION: "4.0.0"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  vsix:
+    name: VS Code VSIX (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+
+      - name: Show toolchain and environment
+        run: |
+          echo "Node:  $(node --version)"
+          echo "npm:   $(npm --version)"
+          echo "vsce:  $VSCE_VERSION"
+          echo "Source commit embedded in the About box: $(git rev-parse --short HEAD)"
+
+      - name: Install npm dependencies
+        working-directory: vscode
+        run: |
+          npm ci || { echo "::error title=npm ci failed::Either vscode/package-lock.json is out of sync with vscode/package.json (run 'npm install' in vscode/ and commit the lockfile) or the npm registry was unreachable."; exit 1; }
+
+      # webpack runs ts-loader with transpileOnly, so type errors would not fail
+      # the bundle step on their own.
+      - name: Type-check
+        working-directory: vscode
+        run: |
+          npx tsc --noEmit || { echo "::error title=TypeScript errors::The VS Code shell or shared/ code does not type-check under vscode/tsconfig.json. See the errors above."; exit 1; }
+
+      - name: Bundle (webpack)
+        working-directory: vscode
+        run: |
+          npx webpack --mode production || { echo "::error title=webpack failed::Bundling the extension host or webview failed. Look for 'ERROR in' above; 'Module not found' usually means a missing dependency or a bad import path into shared/."; exit 1; }
+          for f in dist/extension.js dist/webview.js; do
+            [ -s "$f" ] || { echo "::error title=Bundle missing::webpack exited successfully but $f is missing or empty."; ls -la dist || true; exit 1; }
+            echo "$f: $(du -h "$f" | cut -f1)"
+          done
+
+      - name: Package VSIX
+        working-directory: vscode
+        run: |
+          npx --yes "@vscode/vsce@$VSCE_VERSION" package --no-dependencies || {
+            echo "::error title=vsce package failed::vsce rejected the extension. Common causes: a manifest field in vscode/package.json it considers invalid, a missing LICENSE/README/icon, or files excluded by .vscodeignore that 'main' points at."
+            exit 1
+          }
+
+      - name: Show VSIX contents
+        working-directory: vscode
+        run: |
+          vsix=$(ls -1 *.vsix | head -n1)
+          unzip -l "$vsix"
+          for entry in extension/package.json extension/dist/extension.js extension/dist/webview.js; do
+            unzip -l "$vsix" "$entry" >/dev/null || { echo "::error title=VSIX incomplete::$vsix does not contain $entry. Check vscode/.vscodeignore."; exit 1; }
+          done
+
+      - name: Collect artifacts
+        run: bash .github/scripts/collect-artifacts.sh artifacts "VS Code extension=vscode/*.vsix"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: git-time-lapse-vscode
+          path: artifacts/
+          if-no-files-found: error

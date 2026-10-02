@@ -13,6 +13,12 @@ AGENTS.md                    Agent/contributor instructions (this file)
 CLAUDE.md                    Stub that imports AGENTS.md for Claude Code
 README.md, LICENSE, NOTICES.txt, .gitignore
 
+.github/
+  workflows/tauri.yml        CI: Tauri v2 (Windows, Ubuntu 22.04) and v1 (Rocky Linux 8 container)
+  workflows/vscode.yml       CI: VS Code VSIX (Linux)
+  workflows/visual-studio.yml  CI: VS webview bundle + VSIX via MSBuild (Windows)
+  scripts/collect-artifacts.sh  Gathers build outputs, logs size and SHA-256, fails on missing files
+
 shared/                      Platform-agnostic TypeScript
   git_backend.ts             Git CLI interaction (all READ-ONLY commands)
   types.ts                   Interfaces, config, error classes
