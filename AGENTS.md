@@ -14,7 +14,7 @@ CLAUDE.md                    Stub that imports AGENTS.md for Claude Code
 README.md, LICENSE, NOTICES.txt, .gitignore
 
 .github/
-  workflows/tauri.yml        CI: Tauri v2 (Windows, Ubuntu 22.04) and v1 (Rocky Linux 8 container)
+  workflows/tauri.yml        CI: Tauri v2 (Windows, Ubuntu 22.04, macOS arm64 + x64) and v1 (Rocky Linux 8 container)
   workflows/vscode.yml       CI: VS Code VSIX (Linux)
   workflows/visual-studio.yml  CI: VS webview bundle + VSIX via MSBuild (Windows)
   scripts/collect-artifacts.sh  Gathers build outputs, logs size and SHA-256, fails on missing files
@@ -31,7 +31,7 @@ shared/                      Platform-agnostic TypeScript
     themes.ts                highlight.js theme catalog
     css.d.ts                 Module declaration for CSS imports
 
-tauri/                       Desktop app shell (Rust + WebView2/WebKitGTK)
+tauri/                       Desktop app shell (Rust + WebView2/WebKitGTK/WKWebView)
   index.html                 Vite entry page
   package.json, package-lock.json, .gitignore
   src/main.ts                PlatformHost + AppDeps wiring
@@ -112,9 +112,10 @@ visual-studio/               Visual Studio 2022/2026 extension shell
 - **Git** on PATH
 - **TypeScript** (installed per-target via npm)
 
-### Tauri desktop (Windows + Linux)
+### Tauri desktop (Windows + Linux + macOS)
 - **Rust** toolchain (rustup + cargo), >= 1.77.2 (`rust-version` in both `Cargo.toml` files)
 - **Windows**: Microsoft C++ Build Tools with the "Desktop development with C++" workload, the MSVC Rust toolchain as the default host triple, and the WebView2 runtime (pre-installed on Windows 10 version 1803 and later). Building the MSI bundle also needs the VBSCRIPT optional feature enabled.
+- **macOS (v2 shell only)**: Xcode Command Line Tools (`xcode-select --install`); full Xcode also works. The webview is the system WKWebView. Builds are native to the host architecture (arm64 or x64) and are not code-signed or notarized, so Gatekeeper blocks a downloaded copy until the user allows it.
 - **Linux builds** run either on a Linux machine or from Windows via WSL; the package lists below apply to the Linux system doing the build (the WSL distro, in the WSL case).
 - **Linux (v2 shell)**: Tauri v2's Debian/Ubuntu list (`libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`) plus `patchelf`. Needs glib >= 2.70, so Ubuntu 22.04+ / el10, not RHEL8 or RHEL9.
 - **Linux (v1 shell, RHEL8)**: `webkit2gtk3-devel`, `gtk3-devel`, `libsoup-devel` (2.x), `librsvg2-devel`, `openssl-devel`, `curl`, `patchelf`, `file`, `wget`, plus the "Development Tools" group. `wget` is required: Tauri v1's `appimage.sh` shells out to it. Tauri v1's upstream list also has `libappindicator-gtk3-devel`, which is only needed for the system tray; the v1 crate does not enable it.
