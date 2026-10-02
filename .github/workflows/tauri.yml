@@ -54,6 +54,12 @@ jobs:
             # 2.35. A newer image would silently raise it.
             os: ubuntu-22.04
             artifact: git-time-lapse-tauri-v2-linux
+          - name: macOS arm64
+            os: macos-15
+            artifact: git-time-lapse-tauri-v2-macos-arm64
+          - name: macOS x64
+            os: macos-15-intel
+            artifact: git-time-lapse-tauri-v2-macos-x64
     steps:
       - name: Check out
         uses: actions/checkout@v7
@@ -151,7 +157,7 @@ jobs:
         working-directory: tauri
         run: |
           npx tauri build --verbose || {
-            echo "::error title=tauri build failed::Search the log above for the first 'error'. Rust compile errors look like 'error[E....]'; frontend failures come from 'npm run build:v2' (tsc + vite); bundler failures mention linuxdeploy/AppImage on Linux or light.exe/makensis on Windows."
+            echo "::error title=tauri build failed::Search the log above for the first 'error'. Rust compile errors look like 'error[E....]'; frontend failures come from 'npm run build:v2' (tsc + vite); bundler failures mention linuxdeploy/AppImage on Linux, light.exe/makensis on Windows, or bundle_dmg.sh on macOS."
             exit 1
           }
 
@@ -181,6 +187,16 @@ jobs:
             "Debian package=$r/bundle/deb/*.deb" \
             "RPM package=$r/bundle/rpm/*.rpm" \
             "AppImage=$r/bundle/appimage/*.AppImage"
+
+      # The .app bundle is a directory, so it ships inside the DMG rather than
+      # as a separate artifact.
+      - name: Collect artifacts (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          r=tauri/src-tauri/target/release
+          bash .github/scripts/collect-artifacts.sh artifacts \
+            "Portable binary=$r/git-time-lapse" \
+            "DMG=$r/bundle/dmg/*.dmg"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7

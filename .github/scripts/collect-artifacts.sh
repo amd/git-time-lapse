@@ -41,7 +41,12 @@ for spec in "$@"; do
   fi
   for f in "${matches[@]}"; do
     size=$(du -h "$f" | cut -f1)
-    sum=$(sha256sum "$f" | cut -d' ' -f1)
+    if command -v sha256sum >/dev/null; then
+      sum=$(sha256sum "$f" | cut -d' ' -f1)
+    else
+      # macOS runners ship shasum but not necessarily sha256sum.
+      sum=$(shasum -a 256 "$f" | cut -d' ' -f1)
+    fi
     echo "$label: $f ($size, sha256 $sum)"
     cp "$f" "$dest/"
     echo "| $label | \`$(basename "$f")\` | $size | \`$sum\` |" >> "$summary"
