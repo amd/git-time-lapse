@@ -1,0 +1,167 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+name: Visual Studio extension
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "shared/**"
+      - "visual-studio/**"
+      - ".github/workflows/visual-studio.yml"
+      - ".github/scripts/**"
+  pull_request:
+    paths:
+      - "shared/**"
+      - "visual-studio/**"
+      - ".github/workflows/visual-studio.yml"
+      - ".github/scripts/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: "22"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  vsix:
+    name: VSIX (Windows, MSBuild)
+    # The C# half of the extension targets .NET Framework 4.7.2, uses WPF and
+    # runs the VSSDK tools (VSCT, CreatePkgDef), all of which need Windows.
+    runs-on: windows-2025
+    timeout-minutes: 30
+    env:
+      PROJECT: visual-studio/extension/GitTimeLapseExtension.csproj
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: visual-studio/package-lock.json
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v3
+        with:
+          msbuild-architecture: x64
+
+      # Steps that call msbuild use pwsh: Git Bash does not find the MSBuild.exe
+      # that setup-msbuild adds to PATH, and fails with "msbuild: command not found".
+      - name: Show toolchain and environment
+        shell: pwsh
+        run: |
+          Write-Output "::group::Versions"
+          Write-Output "Node:     $(node --version)"
+          Write-Output "npm:      $(npm --version)"
+          Write-Output "MSBuild:  $(msbuild -version -nologo | Select-Object -Last 1)"
+          Write-Output ".NET SDKs:"
+          dotnet --list-sdks
+          Write-Output "::endgroup::"
+          Write-Output "Source commit embedded in the About box: $(git rev-parse --short HEAD)"
+
+      - name: Preflight checks
+        run: |
+          refs="/c/Program Files (x86)/Reference Assemblies/Microsoft/Framework/.NETFramework/v4.7.2"
+          if [ -d "$refs" ]; then
+            echo ".NET Framework 4.7.2 reference assemblies: present"
+          else
+            echo "::error title=Missing targeting pack::.NET Framework 4.7.2 reference assemblies not found at '$refs'. The runner image needs the 4.7.2 targeting pack (Microsoft.Net.Component.4.7.2.TargetingPack)."
+            exit 1
+          fi
+
+      - name: Install npm dependencies
+        working-directory: visual-studio
+        run: |
+          npm ci || { echo "::error title=npm ci failed::Either visual-studio/package-lock.json is out of sync with visual-studio/package.json (run 'npm install' in visual-studio/ and commit the lockfile) or the npm registry was unreachable."; exit 1; }
+
+      # webpack runs ts-loader with transpileOnly, so type errors would not fail
+      # the bundle step on their own.
+      - name: Type-check
+        working-directory: visual-studio
+        run: |
+          npx tsc --noEmit || { echo "::error title=TypeScript errors::The Visual Studio shell or shared/ code does not type-check under visual-studio/tsconfig.json. See the errors above."; exit 1; }
+
+      - name: Bundle webview (webpack)
+        working-directory: visual-studio
+        run: |
+          npx webpack --mode production || { echo "::error title=webpack failed::Bundling the webview failed. Look for 'ERROR in' above; 'Module not found' usually means a missing dependency or a bad import path into shared/."; exit 1; }
+          f=extension/Resources/webview/webview.js
+          [ -s "$f" ] || { echo "::error title=Bundle missing::webpack exited successfully but $f is missing or empty."; ls -la extension/Resources/webview || true; exit 1; }
+          echo "$f: $(du -h "$f" | cut -f1)"
+
+      # Restore and build must be separate invocations: the VSSDK targets are
+      # imported from the restored Microsoft.VSSDK.BuildTools package, so they
+      # only exist once restore has finished.
+      - name: Restore NuGet packages
+        shell: pwsh
+        run: |
+          msbuild $env:PROJECT -nologo -t:Restore -v:minimal '-bl:msbuild-restore.binlog'
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::error title=NuGet restore failed::Could not restore the packages in GitTimeLapseExtension.csproj. Check the PackageReference versions exist on nuget.org. The binary log is uploaded as 'msbuild-logs'."
+            exit 1
+          }
+
+      - name: Build VSIX
+        shell: pwsh
+        run: |
+          msbuild $env:PROJECT -nologo -t:Rebuild -p:Configuration=Release -v:normal -clp:Summary '-bl:msbuild-build.binlog'
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::error title=MSBuild failed::Search the log above for ': error'. MSB4057 (target 'GeneratePkgDef' does not exist) means the VSSDK targets were not imported, usually because restore did not run first; VSSDK1xxx errors come from the VSIX/pkgdef tooling. Open the 'msbuild-logs' artifact in the MSBuild Structured Log Viewer for full detail."
+            exit 1
+          }
+
+      - name: Verify VSIX contents
+        shell: pwsh
+        run: |
+          $vsix = 'visual-studio/extension/bin/Release/net472/GitTimeLapse.vsix'
+          if (-not (Test-Path $vsix)) {
+            Write-Output "::error title=VSIX missing::MSBuild succeeded but $vsix was not produced. The EnsureVsix target in the .csproj did not run."
+            Get-ChildItem -Recurse visual-studio/extension/bin -ErrorAction SilentlyContinue | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 300
+            exit 1
+          }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [IO.Compression.ZipFile]::OpenRead((Resolve-Path $vsix))
+          try {
+            $entries = $zip.Entries | ForEach-Object { $_.FullName }
+            $zip.Entries | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 300
+          } finally {
+            $zip.Dispose()
+          }
+          $missing = @('extension.vsixmanifest', 'GitTimeLapse.dll', 'GitTimeLapse.pkgdef', 'webview.js') |
+            Where-Object { $name = $_; -not ($entries | Where-Object { $_ -eq $name -or $_ -like "*/$name" }) }
+          if ($missing) {
+            Write-Output "::error title=VSIX incomplete::$vsix is missing: $($missing -join ', '). Check the IncludeInVSIX items in GitTimeLapseExtension.csproj."
+            exit 1
+          }
+
+      - name: Collect artifacts
+        run: bash .github/scripts/collect-artifacts.sh artifacts "Visual Studio extension=visual-studio/extension/bin/Release/net472/*.vsix"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: git-time-lapse-visual-studio
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload MSBuild logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: msbuild-logs
+          path: "*.binlog"
+          if-no-files-found: ignore
+          retention-days: 7

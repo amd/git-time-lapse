@@ -11,6 +11,7 @@ A visual time-lapse viewer for file history in git repositories, inspired by Per
 | Windows Desktop | Tauri v2 (Rust + WebView2) | Portable EXE, MSI, NSIS installer |
 | Linux Desktop | Tauri v2 (Rust + WebKitGTK 4.1) | Portable binary, .deb, .rpm, AppImage |
 | Linux Desktop (RHEL8/9) | Tauri v1 (Rust + WebKitGTK 4.0) | Portable binary, .deb, .rpm, AppImage |
+| macOS Desktop | Tauri v2 (Rust + WKWebView) | Portable binary, .app bundle, DMG |
 | VS Code Extension | TypeScript + webpack | VSIX |
 | Visual Studio Extension | C# + TypeScript + WebView2 | VSIX |
 
@@ -20,7 +21,7 @@ The codebase follows a **shared core + thin platform shell** pattern. All UI and
 
 ```
 shared/           Platform-agnostic TypeScript (UI, git backend, visualization)
-tauri/            Desktop app shell (Rust + WebView2/WebKitGTK)
+tauri/            Desktop app shell (Rust + WebView2/WebKitGTK/WKWebView)
   src-tauri/      Tauri v2 crate (default)
   src-tauri-v1/   Tauri v1 crate (RHEL8/9 only)
 vscode/           VS Code extension shell
@@ -83,6 +84,15 @@ If you are behind a TLS-intercepting proxy, set `NODE_EXTRA_CA_CERTS` and `CARGO
 `wget: command not found` otherwise. Tauri v1's upstream prerequisites also list
 `libappindicator-gtk3-devel`, which is only needed for the system tray; this app does not use it.
 
+### macOS
+
+| Requirement | Install |
+|------------|---------|
+| Xcode Command Line Tools | `xcode-select --install` (full Xcode also works) |
+| Git | Included with the Command Line Tools, or `brew install git` |
+| Node.js >= 20 | https://nodejs.org or `brew install node` |
+| Rust toolchain >= 1.77.2 | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
+
 ## Quick Start
 
 ### Desktop app (Windows)
@@ -122,6 +132,23 @@ When building via WSL from a git worktree that was created on Windows, `git` ins
 resolve the commit hash (the worktree's `.git` file holds a Windows-absolute path), so the
 About box shows "unknown". Set `SOURCE_COMMIT` to the short commit hash before building to
 override it.
+
+### Desktop app (macOS)
+
+```
+cd tauri
+npm install
+npx tauri build
+```
+
+Output: `tauri/src-tauri/target/release/git-time-lapse`, plus the `.app` bundle under
+`tauri/src-tauri/target/release/bundle/macos/` and a DMG under
+`tauri/src-tauri/target/release/bundle/dmg/`. The build targets the host architecture (arm64 on
+Apple Silicon, x64 on Intel).
+
+The app is not code-signed or notarized, so macOS Gatekeeper blocks it when it was downloaded
+(for example a CI artifact). Allow it under System Settings > Privacy & Security, or remove the
+quarantine attribute with `xattr -dr com.apple.quarantine "<path>.app"`.
 
 ### Desktop app (RHEL8 / RHEL9, Tauri v1)
 
