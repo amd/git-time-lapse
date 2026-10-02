@@ -104,3 +104,4 @@ jobs:
           name: git-time-lapse-vscode
           path: artifacts/
           if-no-files-found: error
+          retention-days: 7

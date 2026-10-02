@@ -155,6 +155,7 @@ jobs:
           name: git-time-lapse-visual-studio
           path: artifacts/
           if-no-files-found: error
+          retention-days: 7
 
       - name: Upload MSBuild logs
         if: always()

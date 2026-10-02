@@ -204,6 +204,7 @@ jobs:
           name: ${{ matrix.artifact }}
           path: artifacts/
           if-no-files-found: error
+          retention-days: 7
 
   v1:
     name: Tauri v1 (Linux, RHEL8-compatible)
@@ -349,3 +350,4 @@ jobs:
           name: git-time-lapse-tauri-v1-linux-el8
           path: artifacts/
           if-no-files-found: error
+          retention-days: 7
