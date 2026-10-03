@@ -18,6 +18,9 @@ README.md, LICENSE, NOTICES.txt, .gitignore
   workflows/vscode.yml       CI: VS Code VSIX (Linux)
   workflows/visual-studio.yml  CI: VS webview bundle + VSIX via MSBuild (Windows)
   scripts/collect-artifacts.sh  Gathers build outputs, logs size and SHA-256, fails on missing files
+  scripts/detect-changes.sh  Path filter run by each workflow's `changes` job. Workflows have no
+                             trigger `paths` so their checks always report and can be required;
+                             with no relevant changes the build jobs skip their steps and pass
 
 shared/                      Platform-agnostic TypeScript
   git_backend.ts             Git CLI interaction (all READ-ONLY commands)
