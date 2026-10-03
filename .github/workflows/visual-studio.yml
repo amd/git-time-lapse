@@ -3,19 +3,11 @@
 name: Visual Studio extension
 
 on:
+  # No `paths` filters: a workflow skipped by its trigger never reports its
+  # checks, so they could not be required. The `changes` job decides instead.
   push:
     branches: [main]
-    paths:
-      - "shared/**"
-      - "visual-studio/**"
-      - ".github/workflows/visual-studio.yml"
-      - ".github/scripts/**"
   pull_request:
-    paths:
-      - "shared/**"
-      - "visual-studio/**"
-      - ".github/workflows/visual-studio.yml"
-      - ".github/scripts/**"
   workflow_dispatch:
 
 permissions:
@@ -33,19 +25,47 @@ defaults:
     shell: bash
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.filter.outputs.build }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes under the watched paths
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash .github/scripts/detect-changes.sh shared/ visual-studio/ .github/workflows/visual-studio.yml .github/scripts/
+
   vsix:
     name: VSIX (Windows, MSBuild)
+    needs: changes
     # The C# half of the extension targets .NET Framework 4.7.2, uses WPF and
     # runs the VSSDK tools (VSCT, CreatePkgDef), all of which need Windows.
     runs-on: windows-2025
     timeout-minutes: 30
     env:
+      BUILD: ${{ needs.changes.outputs.build }}
       PROJECT: visual-studio/extension/GitTimeLapseExtension.csproj
     steps:
+      - name: Skip (no relevant changes)
+        if: env.BUILD != 'true'
+        run: echo "::notice title=Build skipped::No changes under this workflow's watched paths, so every build step is skipped and the check passes. See the 'Detect changes' job for the file list."
+
       - name: Check out
+        if: env.BUILD == 'true'
         uses: actions/checkout@v7
 
       - name: Set up Node.js ${{ env.NODE_VERSION }}
+        if: env.BUILD == 'true'
         uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -53,6 +73,7 @@ jobs:
           cache-dependency-path: visual-studio/package-lock.json
 
       - name: Set up MSBuild
+        if: env.BUILD == 'true'
         uses: microsoft/setup-msbuild@v3
         with:
           msbuild-architecture: x64
@@ -60,6 +81,7 @@ jobs:
       # Steps that call msbuild use pwsh: Git Bash does not find the MSBuild.exe
       # that setup-msbuild adds to PATH, and fails with "msbuild: command not found".
       - name: Show toolchain and environment
+        if: env.BUILD == 'true'
         shell: pwsh
         run: |
           Write-Output "::group::Versions"
@@ -72,6 +94,7 @@ jobs:
           Write-Output "Source commit embedded in the About box: $(git rev-parse --short HEAD)"
 
       - name: Preflight checks
+        if: env.BUILD == 'true'
         run: |
           refs="/c/Program Files (x86)/Reference Assemblies/Microsoft/Framework/.NETFramework/v4.7.2"
           if [ -d "$refs" ]; then
@@ -82,6 +105,7 @@ jobs:
           fi
 
       - name: Install npm dependencies
+        if: env.BUILD == 'true'
         working-directory: visual-studio
         run: |
           npm ci || { echo "::error title=npm ci failed::Either visual-studio/package-lock.json is out of sync with visual-studio/package.json (run 'npm install' in visual-studio/ and commit the lockfile) or the npm registry was unreachable."; exit 1; }
@@ -89,11 +113,13 @@ jobs:
       # webpack runs ts-loader with transpileOnly, so type errors would not fail
       # the bundle step on their own.
       - name: Type-check
+        if: env.BUILD == 'true'
         working-directory: visual-studio
         run: |
           npx tsc --noEmit || { echo "::error title=TypeScript errors::The Visual Studio shell or shared/ code does not type-check under visual-studio/tsconfig.json. See the errors above."; exit 1; }
 
       - name: Bundle webview (webpack)
+        if: env.BUILD == 'true'
         working-directory: visual-studio
         run: |
           npx webpack --mode production || { echo "::error title=webpack failed::Bundling the webview failed. Look for 'ERROR in' above; 'Module not found' usually means a missing dependency or a bad import path into shared/."; exit 1; }
@@ -105,6 +131,7 @@ jobs:
       # imported from the restored Microsoft.VSSDK.BuildTools package, so they
       # only exist once restore has finished.
       - name: Restore NuGet packages
+        if: env.BUILD == 'true'
         shell: pwsh
         run: |
           msbuild $env:PROJECT -nologo -t:Restore -v:minimal '-bl:msbuild-restore.binlog'
@@ -114,6 +141,7 @@ jobs:
           }
 
       - name: Build VSIX
+        if: env.BUILD == 'true'
         shell: pwsh
         run: |
           msbuild $env:PROJECT -nologo -t:Rebuild -p:Configuration=Release -v:normal -clp:Summary '-bl:msbuild-build.binlog'
@@ -123,6 +151,7 @@ jobs:
           }
 
       - name: Verify VSIX contents
+        if: env.BUILD == 'true'
         shell: pwsh
         run: |
           $vsix = 'visual-studio/extension/bin/Release/net472/GitTimeLapse.vsix'
@@ -147,9 +176,11 @@ jobs:
           }
 
       - name: Collect artifacts
+        if: env.BUILD == 'true'
         run: bash .github/scripts/collect-artifacts.sh artifacts "Visual Studio extension=visual-studio/extension/bin/Release/net472/*.vsix"
 
       - name: Upload artifacts
+        if: env.BUILD == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: git-time-lapse-visual-studio
@@ -158,7 +189,7 @@ jobs:
           retention-days: 7
 
       - name: Upload MSBuild logs
-        if: always()
+        if: always() && env.BUILD == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: msbuild-logs
