@@ -2,6 +2,8 @@
 <!-- SPDX-License-Identifier: MIT -->
 # Git Time-Lapse View
 
+[![Desktop Builds](https://github.com/amd/git-time-lapse/actions/workflows/tauri.yml/badge.svg?branch=main)](https://github.com/amd/git-time-lapse/actions/workflows/tauri.yml) [![Visual Studio extension](https://github.com/amd/git-time-lapse/actions/workflows/visual-studio.yml/badge.svg)](https://github.com/amd/git-time-lapse/actions/workflows/visual-studio.yml) [![VS Code extension](https://github.com/amd/git-time-lapse/actions/workflows/vscode.yml/badge.svg)](https://github.com/amd/git-time-lapse/actions/workflows/vscode.yml) [![CodeQL](https://github.com/amd/git-time-lapse/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/amd/git-time-lapse/actions/workflows/github-code-scanning/codeql)
+
 A visual time-lapse viewer for file history in git repositories, inspired by Perforce's Time-Lapse View. Scrub through every revision of a file with syntax highlighting, diff coloring, blame, and age visualization.
 
 ## Platform Targets
