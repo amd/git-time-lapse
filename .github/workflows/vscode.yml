@@ -3,19 +3,11 @@
 name: VS Code extension
 
 on:
+  # No `paths` filters: a workflow skipped by its trigger never reports its
+  # checks, so they could not be required. The `changes` job decides instead.
   push:
     branches: [main]
-    paths:
-      - "shared/**"
-      - "vscode/**"
-      - ".github/workflows/vscode.yml"
-      - ".github/scripts/**"
   pull_request:
-    paths:
-      - "shared/**"
-      - "vscode/**"
-      - ".github/workflows/vscode.yml"
-      - ".github/scripts/**"
   workflow_dispatch:
 
 permissions:
@@ -35,15 +27,44 @@ defaults:
     shell: bash
 
 jobs:
-  vsix:
-    name: VS Code VSIX (Linux)
+  changes:
+    name: Detect changes
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.filter.outputs.build }}
     steps:
       - name: Check out
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes under the watched paths
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash .github/scripts/detect-changes.sh shared/ vscode/ .github/workflows/vscode.yml .github/scripts/
+
+  vsix:
+    name: VS Code VSIX (Linux)
+    needs: changes
+    env:
+      BUILD: ${{ needs.changes.outputs.build }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Skip (no relevant changes)
+        if: env.BUILD != 'true'
+        run: echo "::notice title=Build skipped::No changes under this workflow's watched paths, so every build step is skipped and the check passes. See the 'Detect changes' job for the file list."
+
+      - name: Check out
+        if: env.BUILD == 'true'
+        uses: actions/checkout@v7
 
       - name: Set up Node.js ${{ env.NODE_VERSION }}
+        if: env.BUILD == 'true'
         uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -51,6 +72,7 @@ jobs:
           cache-dependency-path: vscode/package-lock.json
 
       - name: Show toolchain and environment
+        if: env.BUILD == 'true'
         run: |
           echo "Node:  $(node --version)"
           echo "npm:   $(npm --version)"
@@ -58,6 +80,7 @@ jobs:
           echo "Source commit embedded in the About box: $(git rev-parse --short HEAD)"
 
       - name: Install npm dependencies
+        if: env.BUILD == 'true'
         working-directory: vscode
         run: |
           npm ci || { echo "::error title=npm ci failed::Either vscode/package-lock.json is out of sync with vscode/package.json (run 'npm install' in vscode/ and commit the lockfile) or the npm registry was unreachable."; exit 1; }
@@ -65,11 +88,13 @@ jobs:
       # webpack runs ts-loader with transpileOnly, so type errors would not fail
       # the bundle step on their own.
       - name: Type-check
+        if: env.BUILD == 'true'
         working-directory: vscode
         run: |
           npx tsc --noEmit || { echo "::error title=TypeScript errors::The VS Code shell or shared/ code does not type-check under vscode/tsconfig.json. See the errors above."; exit 1; }
 
       - name: Bundle (webpack)
+        if: env.BUILD == 'true'
         working-directory: vscode
         run: |
           npx webpack --mode production || { echo "::error title=webpack failed::Bundling the extension host or webview failed. Look for 'ERROR in' above; 'Module not found' usually means a missing dependency or a bad import path into shared/."; exit 1; }
@@ -79,6 +104,7 @@ jobs:
           done
 
       - name: Package VSIX
+        if: env.BUILD == 'true'
         working-directory: vscode
         run: |
           npx --yes "@vscode/vsce@$VSCE_VERSION" package --no-dependencies || {
@@ -87,6 +113,7 @@ jobs:
           }
 
       - name: Show VSIX contents
+        if: env.BUILD == 'true'
         working-directory: vscode
         run: |
           vsix=$(ls -1 *.vsix | sed -n 1p)
@@ -96,9 +123,11 @@ jobs:
           done
 
       - name: Collect artifacts
+        if: env.BUILD == 'true'
         run: bash .github/scripts/collect-artifacts.sh artifacts "VS Code extension=vscode/*.vsix"
 
       - name: Upload artifacts
+        if: env.BUILD == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: git-time-lapse-vscode
