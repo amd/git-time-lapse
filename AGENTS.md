@@ -12,6 +12,7 @@ The codebase follows a **shared core + thin platform shell** pattern:
 AGENTS.md                    Agent/contributor instructions (this file)
 CLAUDE.md                    Stub that imports AGENTS.md for Claude Code
 README.md, LICENSE, NOTICES.txt, .gitignore
+docs/demo.gif                Animated demo embedded in README.md
 
 .github/
   workflows/tauri.yml        CI: Tauri v2 (Windows, Ubuntu 22.04, macOS arm64 + x64) and v1 (Rocky Linux 8 container)
