@@ -18,6 +18,10 @@ docs/demo.gif                Animated demo embedded in README.md
   workflows/tauri.yml        CI: Tauri v2 (Windows, Ubuntu 22.04, macOS arm64 + x64) and v1 (Rocky Linux 8 container)
   workflows/vscode.yml       CI: VS Code VSIX (Linux)
   workflows/visual-studio.yml  CI: VS webview bundle + VSIX via MSBuild (Windows)
+  workflows/release.yml      On a `v*` tag: checks versions, calls the three workflows above,
+                             publishes a GitHub release with all packages
+  scripts/check-release-version.sh  Fails a release unless every version field matches the tag
+  scripts/stage-release-assets.sh  Renames build artifacts to release asset names, writes SHA256SUMS.txt
   scripts/collect-artifacts.sh  Gathers build outputs, logs size and SHA-256, fails on missing files
   scripts/detect-changes.sh  Path filter run by each workflow's `changes` job. Workflows have no
                              trigger `paths` so their checks always report and can be required;
