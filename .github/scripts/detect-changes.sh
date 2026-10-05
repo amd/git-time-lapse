@@ -9,9 +9,10 @@
 # done here rather than with `on.<event>.paths` because a workflow skipped by a
 # trigger filter never reports its checks, so they could not be required.
 #
-# Reads EVENT_NAME, BASE_SHA and HEAD_SHA from the environment. Anything that
-# prevents an accurate diff (manual dispatch, a new branch, a force push that
-# dropped the old tip) builds everything rather than risk skipping a build.
+# Reads EVENT_NAME, REF_TYPE, BASE_SHA and HEAD_SHA from the environment. Tag
+# builds (releases) always build. Anything that prevents an accurate diff
+# (manual dispatch, a new branch, a force push that dropped the old tip) builds
+# everything rather than risk skipping a build.
 set -euo pipefail
 
 out=${GITHUB_OUTPUT:-/dev/stdout}
@@ -25,6 +26,7 @@ build_all() {
 }
 
 [ "${EVENT_NAME:-}" = workflow_dispatch ] && build_all "manual dispatch"
+[ "${REF_TYPE:-}" = tag ] && build_all "tag build"
 [ -n "${BASE_SHA:-}" ] && [ -n "${HEAD_SHA:-}" ] || build_all "no base/head commit for this event"
 [ "$BASE_SHA" = 0000000000000000000000000000000000000000 ] && build_all "no previous commit (new branch)"
 git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || build_all "base commit $BASE_SHA is not available"

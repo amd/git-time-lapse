@@ -9,12 +9,16 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # Called by release.yml on a version tag to build the release assets.
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Not github.workflow: in a called workflow that is the caller's name, so the
+  # three builds of a release would share one group and block each other.
+  group: tauri-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -46,6 +50,7 @@ jobs:
         id: filter
         env:
           EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: bash .github/scripts/detect-changes.sh shared/ tauri/ .github/workflows/tauri.yml .github/scripts/
@@ -64,6 +69,7 @@ jobs:
           - name: Windows
             os: windows-2025
             artifact: git-time-lapse-tauri-v2-windows
+            build-args: --no-bundle
           - name: Linux
             # The build host's glibc becomes the binary's floor; 22.04 gives
             # 2.35. A newer image would silently raise it.
@@ -146,17 +152,6 @@ jobs:
           done
           exit "$fail"
 
-      - name: Preflight checks (Windows)
-        if: env.BUILD == 'true' && runner.os == 'Windows'
-        run: |
-          # WiX 3's light.exe, which Tauri runs to produce the MSI, depends on
-          # the VBSCRIPT optional Windows feature.
-          if [ -f /c/Windows/System32/vbscript.dll ]; then
-            echo "VBScript: present"
-          else
-            echo "::warning title=VBScript not found::vbscript.dll is missing, so MSI bundling (WiX light.exe) is likely to fail. Enable the VBSCRIPT optional feature on the runner image."
-          fi
-
       - name: Install npm dependencies
         if: env.BUILD == 'true'
         working-directory: tauri
@@ -185,8 +180,8 @@ jobs:
         if: env.BUILD == 'true'
         working-directory: tauri
         run: |
-          npx tauri build --verbose || {
-            echo "::error title=tauri build failed::Search the log above for the first 'error'. Rust compile errors look like 'error[E....]'; frontend failures come from 'npm run build:v2' (tsc + vite); bundler failures mention linuxdeploy/AppImage on Linux, light.exe/makensis on Windows, or bundle_dmg.sh on macOS."
+          npx tauri build --verbose ${{ matrix.build-args }} || {
+            echo "::error title=tauri build failed::Search the log above for the first 'error'. Rust compile errors look like 'error[E....]'; frontend failures come from 'npm run build:v2' (tsc + vite); bundler failures mention linuxdeploy/AppImage on Linux or bundle_dmg.sh on macOS."
             exit 1
           }
 
@@ -203,9 +198,7 @@ jobs:
         run: |
           r=tauri/src-tauri/target/release
           bash .github/scripts/collect-artifacts.sh artifacts \
-            "Portable EXE=$r/git-time-lapse.exe" \
-            "MSI installer=$r/bundle/msi/*.msi" \
-            "NSIS installer=$r/bundle/nsis/*.exe"
+            "Portable EXE=$r/git-time-lapse.exe"
 
       - name: Collect artifacts (Linux)
         if: env.BUILD == 'true' && runner.os == 'Linux'

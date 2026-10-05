@@ -1,0 +1,92 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+name: Release
+
+# Pushing a version tag (v1.2.0, or v1.2.0-rc1 for a pre-release) builds every
+# target with the same workflows that gate pull requests, then publishes a
+# GitHub release for the tag with all the packages attached and release notes
+# generated from the pull requests merged since the previous release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  version:
+    name: Check version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Check the tag matches every version field
+        id: check
+        run: bash .github/scripts/check-release-version.sh "$GITHUB_REF_NAME"
+
+  # Each build workflow uploads its packages as artifacts named
+  # git-time-lapse-<platform>, which the release job collects from this run.
+  tauri:
+    name: Tauri desktop
+    needs: version
+    uses: ./.github/workflows/tauri.yml
+
+  vscode:
+    name: VS Code extension
+    needs: version
+    uses: ./.github/workflows/vscode.yml
+
+  visual-studio:
+    name: Visual Studio extension
+    needs: version
+    uses: ./.github/workflows/visual-studio.yml
+
+  release:
+    name: Publish GitHub release
+    needs: [version, tauri, vscode, visual-studio]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: git-time-lapse-*
+          path: downloaded
+
+      - name: Stage release assets
+        run: bash .github/scripts/stage-release-assets.sh downloaded assets "$VERSION"
+
+      - name: Create release
+        run: |
+          prerelease=()
+          [[ $GITHUB_REF_NAME == *-* ]] && prerelease=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" assets/* \
+            --verify-tag \
+            --title "Git Time-Lapse View $GITHUB_REF_NAME" \
+            --generate-notes \
+            "${prerelease[@]}" \
+          || {
+            echo "::error title=Release failed::gh release create failed. If a release for $GITHUB_REF_NAME already exists (for example from an earlier attempt), delete it and re-run this job."
+            exit 1
+          }
+          echo "Published $(gh release view "$GITHUB_REF_NAME" --json url --jq .url)" >> "$GITHUB_STEP_SUMMARY"

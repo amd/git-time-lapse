@@ -14,7 +14,7 @@ The demo shows the Windows desktop app on [`lib/response.js`](https://github.com
 
 | Target | Technology | Output |
 |--------|-----------|--------|
-| Windows Desktop | Tauri v2 (Rust + WebView2) | Portable EXE, MSI, NSIS installer |
+| Windows Desktop | Tauri v2 (Rust + WebView2) | Portable EXE |
 | Linux Desktop | Tauri v2 (Rust + WebKitGTK 4.1) | Portable binary, .deb, .rpm, AppImage |
 | Linux Desktop (RHEL8/9) | Tauri v1 (Rust + WebKitGTK 4.0) | Portable binary, .deb, .rpm, AppImage |
 | macOS Desktop | Tauri v2 (Rust + WKWebView) | Portable binary, .app bundle, DMG |
