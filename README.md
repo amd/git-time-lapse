@@ -188,7 +188,7 @@ cd vscode
 npm install
 npx webpack --mode production
 npx @vscode/vsce package --no-dependencies
-code --install-extension git-time-lapse-vscode-*.vsix --force
+code --install-extension amd-git-time-lapse-vscode-*.vsix --force
 ```
 
 ### Visual Studio extension
