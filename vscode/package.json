@@ -1,8 +1,8 @@
 {
   "name": "git-time-lapse-vscode",
   "displayName": "Git Time-Lapse View",
-  "description": "Git Time-Lapse View v1.1.0 — visual time-lapse viewer for file history in git repositories",
-  "version": "1.1.0",
+  "description": "Git Time-Lapse View v1.1.1 — visual time-lapse viewer for file history in git repositories",
+  "version": "1.1.1",
   "publisher": "AMD",
   "icon": "icon.png",
   "license": "MIT",

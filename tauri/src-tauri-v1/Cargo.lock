@@ -1036,7 +1036,7 @@ dependencies = [
 
 [[package]]
 name = "git-time-lapse-v1"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "serde",
  "serde_json",
