@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Git Time-Lapse View v1.1.1",
-  "version": "1.1.1",
+  "productName": "Git Time-Lapse View v1.1.2",
+  "version": "1.1.2",
   "identifier": "com.amd.gittimelapse",
   "build": {
     "frontendDist": "../dist",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Git Time-Lapse View v1.1.1",
+        "title": "Git Time-Lapse View v1.1.2",
         "width": 1200,
         "height": 800,
         "resizable": true,
