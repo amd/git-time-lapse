@@ -152,9 +152,9 @@ The version is not derived from a single source, so every field below must be up
 - `tauri/src-tauri-v1/tauri.conf.json`: `package.version`, `package.productName`, `tauri.windows[0].title`. `productName` also names the v1 binary and bundle files.
 - `tauri/src-tauri-v1/Cargo.toml`: `[package]` `version`, `description`
 - `tauri/src-tauri-v1/Cargo.lock`: `version` of the `git-time-lapse-v1` package entry
-- `vscode/package.json`: `version` (semver, no pre-release suffix), `displayName`, `description`. `displayName` is also the version string shown in the extension (`__APP_VERSION__`, read by `webpack.config.js`).
+- `vscode/package.json`: `version` (semver, no pre-release suffix), `description`. `webpack.config.js` builds the version string shown in the extension (`__APP_VERSION__`) from `version`; `displayName` carries no version.
 - `vscode/package-lock.json`: top-level `version` and `packages[""].version`
-- `visual-studio/package.json`: `version`, `displayName`, `description`. `displayName` is also the version string shown in the VS About dialog (`__APP_VERSION__`, read by `webpack.config.js`).
+- `visual-studio/package.json`: `version`, `description`. `webpack.config.js` builds the version string shown in the VS About dialog (`__APP_VERSION__`) from `version`; `displayName` carries no version.
 - `visual-studio/package-lock.json`: top-level `version` and `packages[""].version`
 - `visual-studio/extension/source.extension.vsixmanifest`: `Identity` `Version` (four-part, `<version>.0`) and `Description`
 - `visual-studio/extension/Properties/AssemblyInfo.cs`: `AssemblyVersion` and `AssemblyFileVersion` (four-part)

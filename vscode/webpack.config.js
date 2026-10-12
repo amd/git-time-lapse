@@ -8,7 +8,7 @@ const { execSync } = require("child_process");
 const webpack = require("webpack");
 
 const pkg = require("./package.json");
-const appVersion = pkg.displayName || "unknown";
+const appVersion = pkg.version ? `Git Time-Lapse View v${pkg.version}` : "unknown";
 let sourceCommit = "unknown";
 try { sourceCommit = execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim(); } catch { /* not in a git repo */ }
 
