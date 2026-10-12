@@ -3,9 +3,9 @@
 <!-- SPDX-License-Identifier: MIT -->
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="AMD.git-time-lapse-vs" Version="1.1.0.0" Language="en-US" Publisher="AMD - Advanced Micro Devices" />
+    <Identity Id="AMD.git-time-lapse-vs" Version="1.1.1.0" Language="en-US" Publisher="AMD - Advanced Micro Devices" />
     <DisplayName>Git Time-Lapse View</DisplayName>
-    <Description xml:space="preserve">Git Time-Lapse View v1.1.0 — visual time-lapse viewer for file history in git repositories. Step through a file's revisions with diff, blame, and age coloring.</Description>
+    <Description xml:space="preserve">Git Time-Lapse View v1.1.1 — visual time-lapse viewer for file history in git repositories. Step through a file's revisions with diff, blame, and age coloring.</Description>
     <MoreInfo>https://github.com/amd/git-time-lapse</MoreInfo>
     <License>Resources\LICENSE.txt</License>
     <Icon>Resources\icon.png</Icon>

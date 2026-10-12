@@ -12,8 +12,8 @@
 
 [package]
 name = "git-time-lapse"
-version = "1.1.0"
-description = "Git Time-Lapse View v1.1.0"
+version = "1.1.1"
+description = "Git Time-Lapse View v1.1.1"
 authors = ["Advanced Micro Devices, Inc."]
 license = "MIT"
 repository = "https://github.com/amd/git-time-lapse"
