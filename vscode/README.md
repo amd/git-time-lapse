@@ -2,11 +2,11 @@
 <!-- SPDX-License-Identifier: MIT -->
 # Git Time-Lapse View
 
-A visual time-lapse viewer for a single file's history in a git repository.
+A visual time-lapse viewer for file history in git repositories, inspired by Perforce's Time-Lapse View. Scrub through every revision of a file with syntax highlighting, diff coloring, blame, and age visualization.
 
-Scrub a slider through the commits that touched a file and watch a
-syntax-highlighted view of its contents change over time, with diff, blame,
-and age coloring, a blame gutter, and per-revision commit details.
+![Git Time-Lapse View opening lib/response.js from expressjs/express, stepping and scrubbing through its 327 revisions with diff coloring, switching from a light to a dark theme, then showing blame by author and age coloring](https://raw.githubusercontent.com/amd/git-time-lapse/main/docs/demo.gif)
+
+The demo shows the Windows desktop app on [`lib/response.js`](https://github.com/expressjs/express/blob/master/lib/response.js) from [expressjs/express](https://github.com/expressjs/express) (MIT).
 
 Requires VS Code 1.85.0 or later.
 
