@@ -475,9 +475,10 @@ class App {
   // Range-diff coloring state. In "range" mode the slider splits into two
   // handles bounding a start/end revision; the code view shows the file at the
   // END revision, colored by the accumulated diff from START to END. Indices are
-  // into `commits` but address real revisions only (the virtual M revision is
-  // never a range endpoint). `rangeStart <= rangeEnd` is maintained by the
-  // handle input clamps.
+  // into `commits`. The start addresses real revisions only; the end may also be
+  // the virtual M revision, selected with the M button while the end handle stays
+  // parked at the last real revision. `rangeStart <= rangeEnd` is maintained by
+  // the handle input clamps.
   private rangeStart = 0;
   private rangeEnd = 0;
 
@@ -1683,10 +1684,18 @@ class App {
     // Separate button for the virtual "M" (uncommitted changes) revision. The
     // slider only spans real revisions; M lives here so the native slider's
     // linear tick distribution stays aligned with the real-revision labels.
+    // In range mode the button moves into the range wrap and toggles the end
+    // handle between M and the last real revision.
     this.mRevBtn = el("button", "m-rev-btn hidden", "M");
     this.mRevBtn.title = "Uncommitted changes";
     this.mRevBtn.addEventListener("click", () => {
       if (!this.hasModifiedRev) return;
+      if (this.coloring === "range") {
+        this.setRangeEnd(
+          this.isModifiedRev(this.rangeEnd) ? this.lastRealIndex() : this.commits.length - 1,
+        );
+        return;
+      }
       if (this.isModifiedRev(this.currentIndex)) {
         this.setRevision(this.lastRealIndex());
       } else {
@@ -1895,12 +1904,14 @@ class App {
     this.syncRevInput();
   }
 
-  // Resolve a single range-endpoint token to a 0-based real revision index.
-  // Accepts a 1-based revision number ("42") or, in commit mode, an 8-char
-  // hash. Returns null when the token can't be resolved to a real revision.
+  // Resolve a single range-endpoint token to a 0-based revision index. Accepts
+  // a 1-based revision number ("42"), "M" for the uncommitted revision when
+  // present, or, in commit mode, an 8-char hash. Returns null when the token
+  // can't be resolved.
   private resolveRangeToken(token: string): number | null {
     const t = token.trim();
     if (!t) return null;
+    if (this.hasModifiedRev && t.toLowerCase() === "m") return this.commits.length - 1;
     if (this.revInputMode === "commit") {
       const query = t.slice(0, 8).toLowerCase();
       const index = this.commits.findIndex(
@@ -1935,10 +1946,12 @@ class App {
       this.syncRevInput(); // revert
       return;
     }
-    this.rangeStart = Math.min(a, b);
+    // Only the end handle can sit on M, so "M — M" diffs the working tree
+    // against the last real revision.
+    this.rangeStart = Math.min(a, b, this.lastRealIndex());
     this.rangeEnd = Math.max(a, b);
     this.rangeStartInput.value = String(this.rangeStart);
-    this.rangeEndInput.value = String(this.rangeEnd);
+    this.rangeEndInput.value = String(Math.min(this.rangeEnd, this.lastRealIndex()));
     this.layoutRangeFill();
     this.revInput.blur();
     this.syncRevInput();
@@ -1958,7 +1971,8 @@ class App {
       return;
     }
     if (this.coloring === "range") {
-      this.revInput.value = `${this.rangeStart + 1} — ${this.rangeEnd + 1}`;
+      const end = this.isModifiedRev(this.rangeEnd) ? "M" : String(this.rangeEnd + 1);
+      this.revInput.value = `${this.rangeStart + 1} — ${end}`;
       return;
     }
     const cur = this.currentIndex;
@@ -5229,15 +5243,19 @@ class App {
     this.setRevision(this.currentIndex + delta);
   }
 
-  // In range mode, Left/Right nudge the end handle (clamped to >= start). Falls
-  // back to plain revision stepping when range mode is off.
+  // In range mode, Left/Right nudge the end handle (clamped to >= start), past
+  // the last real revision onto M when present. Falls back to plain revision
+  // stepping when range mode is off.
   private stepRangeEnd(delta: number): void {
     if (this.coloring !== "range") { this.stepRevision(delta); return; }
-    const max = this.lastRealIndex();
-    const next = Math.max(this.rangeStart, Math.min(max, this.rangeEnd + delta));
-    if (next === this.rangeEnd) return;
-    this.rangeEnd = next;
-    this.rangeEndInput.value = String(next);
+    const next = Math.max(this.rangeStart, Math.min(this.commits.length - 1, this.rangeEnd + delta));
+    if (next !== this.rangeEnd) this.setRangeEnd(next);
+  }
+
+  // Move the end handle to `index` (a real revision or M) and re-render.
+  private setRangeEnd(index: number): void {
+    this.rangeEnd = Math.max(this.rangeStart, Math.min(this.commits.length - 1, index));
+    this.rangeEndInput.value = String(Math.min(this.rangeEnd, this.lastRealIndex()));
     this.layoutRangeFill();
     this.syncRevInput();
     void this.showRange();
@@ -5264,8 +5282,12 @@ class App {
     // revision, so they don't apply in range mode.
     this.prevRevBtn.disabled = !enabled || rangeMode || cur <= 0;
     this.nextRevBtn.disabled = !enabled || rangeMode || cur >= this.commits.length - 1;
-    // Highlight the M button while the virtual revision is the active one.
-    this.mRevBtn.classList.toggle("active", !rangeMode && this.isModifiedRev(cur));
+    // Highlight the M button while the virtual revision is the active one (in
+    // range mode, while it is the end of the range).
+    this.mRevBtn.classList.toggle(
+      "active",
+      this.isModifiedRev(rangeMode ? this.rangeEnd : cur),
+    );
     // Keep the revision input in sync. syncRevInput respects the active mode
     // and won't clobber the field while the user is editing it (it has focus).
     this.revInput.disabled = !enabled;
@@ -5433,9 +5455,9 @@ class App {
     const range = this.coloring === "range";
     this.slider.parentElement?.classList.toggle("hidden", range);
     this.sliderLabels.classList.toggle("hidden", range);
-    // The M button lives inside the single slider's wrap; hide it in range mode
-    // (its own hidden class still governs presence when NOT in range mode).
-    this.mRevBtn.classList.toggle("range-hidden", range);
+    // The M button follows whichever slider is shown; its own hidden class still
+    // governs whether it appears at all.
+    (range ? this.rangeWrap : this.slider.parentElement)?.appendChild(this.mRevBtn);
     this.rangeWrap.classList.toggle("hidden", !range);
     this.rangeLabels.classList.toggle("hidden", !range);
     if (range) {
@@ -5447,7 +5469,8 @@ class App {
   }
 
   // Set up the dual slider's bounds and values from current state. The handles
-  // address real revisions only, so max is lastRealIndex().
+  // address real revisions only, so max is lastRealIndex(); an M end leaves the
+  // end handle parked there.
   private syncRangeSlider(): void {
     const max = Math.max(0, this.lastRealIndex());
     const disabled = this.slider.disabled;
@@ -5457,9 +5480,9 @@ class App {
       inp.disabled = disabled;
     }
     this.rangeStart = Math.max(0, Math.min(max, this.rangeStart));
-    this.rangeEnd = Math.max(this.rangeStart, Math.min(max, this.rangeEnd));
+    this.rangeEnd = Math.max(this.rangeStart, Math.min(this.commits.length - 1, this.rangeEnd));
     this.rangeStartInput.value = String(this.rangeStart);
-    this.rangeEndInput.value = String(this.rangeEnd);
+    this.rangeEndInput.value = String(Math.min(this.rangeEnd, max));
     this.layoutRangeFill();
     this.syncRevInput();
   }
@@ -5468,7 +5491,11 @@ class App {
   // the range diff.
   private onRangeInput(which: "start" | "end"): void {
     let start = parseInt(this.rangeStartInput.value, 10);
-    let end = parseInt(this.rangeEndInput.value, 10);
+    // Dragging the start handle keeps an M end; the end handle's own value is
+    // only the last real revision it is parked at.
+    let end = which === "start" && this.isModifiedRev(this.rangeEnd)
+      ? this.rangeEnd
+      : parseInt(this.rangeEndInput.value, 10);
     if (isNaN(start)) start = this.rangeStart;
     if (isNaN(end)) end = this.rangeEnd;
     if (which === "start") {
@@ -5479,28 +5506,34 @@ class App {
     this.rangeStart = start;
     this.rangeEnd = end;
     this.rangeStartInput.value = String(start);
-    this.rangeEndInput.value = String(end);
+    this.rangeEndInput.value = String(Math.min(end, this.lastRealIndex()));
     this.layoutRangeFill();
     this.syncRevInput();
     void this.showRange();
   }
 
   // Position the fill bar between the two handles using the same thumb-centered
-  // geometry as the tick marks.
+  // geometry as the tick marks, and highlight the M button while the range ends
+  // on M.
   private layoutRangeFill(): void {
     if (!this.rangeFill) return;
     const x1 = this.rangeTickX(this.rangeStart);
     const x2 = this.rangeTickX(this.rangeEnd);
     this.rangeFill.style.left = `${Math.min(x1, x2)}px`;
     this.rangeFill.style.width = `${Math.max(2, Math.abs(x2 - x1))}px`;
+    this.mRevBtn.classList.toggle("active", this.isModifiedRev(this.rangeEnd));
   }
 
-  // Map a real-revision index to its x pixel on the range slider track, matching
-  // the native thumb centering used by the single slider's tick placement.
+  // Map a revision index to its x pixel on the range slider track, matching
+  // the native thumb centering. Uses the labels' width, which gives up the M
+  // button's footprint exactly as the track does. M clamps to the last real
+  // revision, where the end handle is parked.
   private rangeTickX(value: number): number {
     const max = this.lastRealIndex();
-    const thumb = 36;
-    const width = this.rangeWrap.clientWidth;
+    // The range handles are 18px wide (style.css), not the single slider's 36px,
+    // and a native range input centers its thumb at thumb/2 + frac * (width - thumb).
+    const thumb = 18;
+    const width = this.rangeLabels.clientWidth;
     const span = Math.max(1, width - thumb);
     const frac = max <= 0 ? 0 : Math.min(1, Math.max(0, value / max));
     return thumb / 2 + frac * span;
@@ -5519,7 +5552,7 @@ class App {
     const width = labels.clientWidth;
     if (width <= 0) return;
 
-    const thumb = 36;
+    const thumb = 18; // the range handles' width; see rangeTickX
     const span = Math.max(1, width - thumb);
     const charW = 6.2;
     const tickX = (value: number) =>
@@ -5562,9 +5595,10 @@ class App {
   // the existing diff coloring path.
   private async showRange(): Promise<void> {
     if (!this.backend || !this.commits.length) return;
-    const endIndex = Math.max(0, Math.min(this.lastRealIndex(), this.rangeEnd));
+    const endIndex = Math.max(0, Math.min(this.commits.length - 1, this.rangeEnd));
     this.currentIndex = endIndex;
     const commit = this.commits[endIndex];
+    const isModified = this.isModifiedRev(endIndex);
 
     this.selectedBlock = null;
     this.selectedChunkStart = null;
@@ -5577,14 +5611,17 @@ class App {
 
     let content: string;
     try {
-      content = await this.backend.getFileContent(commit.hexSha);
+      content = isModified
+        ? await this.backend.getWorkingTreeContent()
+        : await this.backend.getFileContent(commit.hexSha);
     } catch (exc) {
       if (exc instanceof BinaryFileError) content = "<binary file — cannot display as text>";
       else if (exc instanceof FileNotFoundError) content = "<file did not exist at this revision>";
       else content = `<error reading content: ${exc}>`;
     }
 
-    this.lineInfos = await this.fetchLineInfos(commit.hexSha);
+    // As in showRevision, the working tree borrows its base commit's blame.
+    this.lineInfos = await this.fetchLineInfos(isModified ? this.modifiedBaseHex : commit.hexSha);
     this.rows = await this.buildDisplay(endIndex, content);
     this.renderRows();
     this.renderGutter();
@@ -5606,13 +5643,13 @@ class App {
     }
 
     const startRev = this.rangeStart + 1;
-    const endRev = endIndex + 1;
+    const endRev = isModified ? "M" : String(endIndex + 1);
     this.infoLabel.textContent =
       `Range: Rev ${startRev} → Rev ${endRev} / ${this.lastRealIndex() + 1}  |  ` +
-      `${this.commits[this.rangeStart].hexSha} … ${commit.hexSha}  ` +
+      `${this.commits[this.rangeStart].hexSha} … ${isModified ? "uncommitted changes" : commit.hexSha}  ` +
       `accumulated diff`;
 
-    this.detailView.innerHTML = this.formatCommitHtml(commit, endIndex + 1);
+    this.detailView.innerHTML = this.formatCommitHtml(commit, isModified ? undefined : endIndex + 1);
     this.refreshStatusBar();
   }
 
@@ -6188,15 +6225,18 @@ class App {
       : (index > 0 && !atBoundary)
         ? commits[index - 1].hexSha
         : "";
+    const endIndex = range ? range[1] : index;
     const isModified =
-      !range &&
       src.hasModifiedRev &&
-      index === commits.length - 1 &&
-      commits[index]?.hexSha === MODIFIED_SENTINEL;
+      endIndex === commits.length - 1 &&
+      commits[endIndex]?.hexSha === MODIFIED_SENTINEL;
     let diffRows: DiffRow[];
     try {
       if (isModified) {
-        diffRows = await backend.getWorkingTreeDiffRows(src.modifiedBaseHex, sourceLines);
+        // A range ending on M diffs the working tree against the start handle.
+        diffRows = await backend.getWorkingTreeDiffRows(
+          range ? oldHex : src.modifiedBaseHex, sourceLines,
+        );
       } else if (atBoundary && backend.getCrossPathDiffRows) {
         const prevCommit = commits[index - 1];
         const prevPath = src.segPaths.get(prevCommit.hexSha) ?? src.filePath;
@@ -6243,7 +6283,7 @@ class App {
     }
 
     const range: [number, number] | null = rangeMode
-      ? [this.rangeStart, Math.min(this.lastRealIndex(), this.rangeEnd)]
+      ? [this.rangeStart, Math.min(this.commits.length - 1, this.rangeEnd)]
       : null;
     const { diffRows, oldHex } = await this.revisionDiffRows(
       this.revisionSource()!, index, sourceLines, range,
@@ -6945,11 +6985,12 @@ class App {
 
     if (newMode === "range") {
       // Seed the range from the current position on first entry: end at the
-      // current real revision, start at the first revision, so the initial view
-      // shows the whole accumulated history up to here. Clamp defensively.
+      // current revision (M included), start at the first revision, so the
+      // initial view shows the whole accumulated history up to here. Clamp
+      // defensively.
       const last = this.lastRealIndex();
       if (last < 0) { this.savePreferences(); return; }
-      this.rangeEnd = Math.max(0, Math.min(last, this.isModifiedRev(this.currentIndex) ? last : this.currentIndex));
+      this.rangeEnd = Math.max(0, Math.min(this.commits.length - 1, this.currentIndex));
       this.rangeStart = 0;
       this.syncRangeSlider();
       void this.showRange();
@@ -6958,8 +6999,9 @@ class App {
     }
 
     if (leavingRange) {
-      // Return the single slider to the end revision we were showing.
-      this.setRevision(Math.max(0, Math.min(this.lastRealIndex(), this.rangeEnd)));
+      // Return the single slider to the end revision we were showing (M
+      // included; setRevision clamps and parks the thumb).
+      this.setRevision(this.rangeEnd);
     }
     // Switching to/from diff changes interleaving, so rebuild rows.
     void this.rebuildDisplay();

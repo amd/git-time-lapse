@@ -538,18 +538,14 @@ button:disabled {
 .m-rev-btn.hidden {
   display: none;
 }
-/* Suppressed while range coloring is active (its wrap is hidden anyway, but the
-   M button is a flex child of that wrap, so this keeps it out on any path). */
-.m-rev-btn.range-hidden {
-  display: none;
-}
-
 /* Reserve the M button's footprint on the labels row so tick coordinates
    (computed from the labels' clientWidth) stay aligned with the slider track,
-   which the flex M button shortens by the same amount. margin (not padding)
+   which the M button shortens by the same amount. margin (not padding)
    narrows clientWidth so the linear tick mapping matches the shortened track.
-   Only applied when the M button is shown (i.e. the wrap contains it). */
-.slider-wrap:has(.m-rev-btn:not(.hidden)) ~ .slider-labels {
+   Only applied when the M button is shown in the wrap the labels belong to;
+   in range mode the button moves into the range wrap. */
+.slider-wrap:has(.m-rev-btn:not(.hidden)) ~ .slider-labels,
+.range-slider-wrap:has(.m-rev-btn:not(.hidden)) ~ .slider-labels {
   margin-right: 28px;
 }
 
@@ -660,6 +656,19 @@ button:disabled {
   border-radius: 6px;
 }
 
+/* With the M button present, the inputs and groove end where it begins, the
+   same 28px the labels row gives up, so the ticks stay under the handles. */
+.range-slider-wrap:has(.m-rev-btn:not(.hidden))::before,
+.range-slider-wrap:has(.m-rev-btn:not(.hidden)) .range-handle {
+  right: 28px;
+  width: calc(100% - 28px);
+}
+.range-slider-wrap .m-rev-btn {
+  margin-left: auto;
+  position: relative;
+  z-index: 3;
+}
+
 /* Highlighted span between the two handles. */
 .range-slider-fill {
   position: absolute;
@@ -672,9 +681,12 @@ button:disabled {
   z-index: 1;
 }
 
+/* border-box keeps the thumb exactly 18px wide including its border, which is
+   the thumb width the range tick geometry in app.ts assumes. */
 .range-slider-wrap .range-handle::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
+  box-sizing: border-box;
   pointer-events: auto;
   width: 18px;
   height: 20px;
@@ -686,6 +698,7 @@ button:disabled {
   z-index: 2;
 }
 .range-slider-wrap .range-handle::-moz-range-thumb {
+  box-sizing: border-box;
   pointer-events: auto;
   width: 18px;
   height: 20px;
