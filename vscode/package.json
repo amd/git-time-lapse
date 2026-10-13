@@ -18,7 +18,15 @@
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Other"
+    "SCM Providers"
+  ],
+  "keywords": [
+    "git",
+    "history",
+    "diff",
+    "blame",
+    "time-lapse",
+    "version-control"
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
