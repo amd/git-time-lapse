@@ -16,7 +16,8 @@ namespace GitTimeLapse
     /// with its own command ID so the invoking surface is unambiguous:
     ///   - Tools menu        -> blank viewer (no file)
     ///   - Solution Explorer  -> the selected file
-    ///   - editor context     -> the active document
+    ///   - editor context     -> the active document (also placed on other
+    ///                           editors' context menus and the document tab)
     /// Execute branches on the command ID, resolves the file (or null), opens the
     /// tool window, and hands the file (if any) to its WebView2 host.
     /// </summary>

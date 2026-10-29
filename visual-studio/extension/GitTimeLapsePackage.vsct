@@ -10,8 +10,13 @@
     per placement) so the handler can tell them apart by command ID:
       - Tools menu                         -> blank viewer
       - Solution Explorer file item menu   -> the selected file
-      - Editor code-window context menu    -> the active document
+      - Editor context menus, document tab -> the active document
     plus the shared icon and the tool window (opened by the command handler).
+
+    Several editors replace the code-window context menu with their own (JSON,
+    HTML, CSS, XAML), and Open Folder mode replaces Solution Explorer's item
+    menu, so the groups are also placed on those menus (CommandPlacements).
+    The document-tab menu covers any other editor with its own menu.
   -->
 
   <Extern href="stdidcmd.h" />
@@ -32,6 +37,10 @@
       <Group guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
         <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN" />
       </Group>
+      <!-- Group on the document tab's context menu (any editor). -->
+      <Group guid="guidGitTimeLapseCmdSet" id="DocumentTabGroup" priority="0x0600">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_EZDOCWINTAB" />
+      </Group>
     </Groups>
 
     <Buttons>
@@ -40,7 +49,8 @@
         invoked it (all three share one Execute but branch on CommandID):
           - Tools menu        -> blank viewer (no file resolved)
           - Solution Explorer -> the selected file
-          - editor context    -> the active document
+          - editor context    -> the active document (also on the document
+                                 tab and other editors' menus, see below)
       -->
       <Button guid="guidGitTimeLapseCmdSet" id="OpenTimeLapseCommandId" priority="0x0100" type="Button">
         <Parent guid="guidGitTimeLapseCmdSet" id="ToolsMenuGroup" />
@@ -75,6 +85,82 @@
 
   </Commands>
 
+  <!--
+    Editors and views with their own context menus. The menu GUIDs and IDs are
+    not in the SDK headers; they are the ones other extensions use for the same
+    menus (for example Open-on-GitHub and CopyGitLink).
+  -->
+  <CommandPlacements>
+    <!-- Editor command on the document tab menu. -->
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="OpenTimeLapseEditorCommandId" priority="0x0100">
+      <Parent guid="guidGitTimeLapseCmdSet" id="DocumentTabGroup" />
+    </CommandPlacement>
+
+    <!-- JSON editor. -->
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidJsonEditorMenus" id="IDMX_JSON_SOURCE" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidJsonEditorMenus" id="IDMX_JSON_SOURCE_1" />
+    </CommandPlacement>
+
+    <!-- HTML and CSS editors (current). -->
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidHtmlEditorMenus" id="IDMX_HTML_SOURCE" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidCssEditorMenus" id="IDMX_CSS_SOURCE" />
+    </CommandPlacement>
+
+    <!-- Legacy HTML/Web Forms and CSS editors. -->
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidHtmEdGrp" id="IDMX_HTM_SOURCE_BASIC" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidHtmEdGrp" id="IDMX_HTM_SOURCE_HTML" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidHtmEdGrp" id="IDMX_HTM_SOURCE_SCRIPT" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidHtmEdGrp" id="IDMX_HTM_SOURCE_ASPX" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidHtmEdGrp" id="IDMX_HTM_SOURCE_ASPX_CODE" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidHtmEdGrp" id="IDMX_HTM_SOURCE_ASPX_CODE_VB" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidHtmEdGrp" id="IDMX_HTM_SOURCE_ASMX_CODE" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidHtmEdGrp" id="IDMX_HTM_SOURCE_ASMX_CODE_VB" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidHtmEdGrp" id="IDMX_HTM_SOURCE_ASAX" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidHtmEdGrp" id="IDMX_HTM_SOURCE_ASAX_CODE" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidHtmEdGrp" id="IDMX_HTM_SOURCE_ASAX_CODE_VB" />
+    </CommandPlacement>
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidCssEdGrp" id="IDMX_HTM_SOURCE_CSS" />
+    </CommandPlacement>
+
+    <!-- XAML editor. -->
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="EditorContextGroup" priority="0x0600">
+      <Parent guid="guidXamlEditorMenus" id="IDM_XAML_EDITOR" />
+    </CommandPlacement>
+
+    <!-- Solution Explorer in Open Folder mode (workspace explorer item menu). -->
+    <CommandPlacement guid="guidGitTimeLapseCmdSet" id="SolutionExplorerGroup" priority="0x0600">
+      <Parent guid="guidWorkspaceExplorerMenus" id="IDM_WORKSPACE_ITEM" />
+    </CommandPlacement>
+  </CommandPlacements>
+
   <Symbols>
     <!-- Package GUID (matches GitTimeLapsePackage.PackageGuidString). -->
     <GuidSymbol name="guidGitTimeLapsePackage" value="{7C6E5D4B-3A2F-1E0D-9C8B-7A6F5E4D3C2B}" />
@@ -84,6 +170,7 @@
       <IDSymbol name="ToolsMenuGroup" value="0x1020" />
       <IDSymbol name="SolutionExplorerGroup" value="0x1021" />
       <IDSymbol name="EditorContextGroup" value="0x1022" />
+      <IDSymbol name="DocumentTabGroup" value="0x1023" />
       <IDSymbol name="OpenTimeLapseCommandId" value="0x0100" />
       <IDSymbol name="OpenTimeLapseSolutionCommandId" value="0x0101" />
       <IDSymbol name="OpenTimeLapseEditorCommandId" value="0x0102" />
@@ -91,6 +178,40 @@
 
     <GuidSymbol name="guidImages" value="{3E4F5A6B-7C8D-9E0A-1B2C-3D4E5F6A7B8C}">
       <IDSymbol name="bmpHourglass" value="1" />
+    </GuidSymbol>
+
+    <!-- Context menus owned by other editors and views (see CommandPlacements). -->
+    <GuidSymbol name="guidJsonEditorMenus" value="{F718CA06-CF4F-4A0C-9106-E79E9EE5E7CD}">
+      <IDSymbol name="IDMX_JSON_SOURCE_1" value="0x0001" />
+      <IDSymbol name="IDMX_JSON_SOURCE" value="0x0003" />
+    </GuidSymbol>
+    <GuidSymbol name="guidHtmlEditorMenus" value="{78F03954-2FB8-4087-8CE7-59D71710B3BB}">
+      <IDSymbol name="IDMX_HTML_SOURCE" value="0x0001" />
+    </GuidSymbol>
+    <GuidSymbol name="guidCssEditorMenus" value="{64DA400E-B4AD-4D67-AA92-4B7ACB01ECD5}">
+      <IDSymbol name="IDMX_CSS_SOURCE" value="0x0002" />
+    </GuidSymbol>
+    <GuidSymbol name="guidHtmEdGrp" value="{D7E8C5E1-BDB8-11D0-9C88-0000F8040A53}">
+      <IDSymbol name="IDMX_HTM_SOURCE_BASIC" value="0x0032" />
+      <IDSymbol name="IDMX_HTM_SOURCE_HTML" value="0x0033" />
+      <IDSymbol name="IDMX_HTM_SOURCE_SCRIPT" value="0x0034" />
+      <IDSymbol name="IDMX_HTM_SOURCE_ASPX" value="0x0035" />
+      <IDSymbol name="IDMX_HTM_SOURCE_ASPX_CODE" value="0x0036" />
+      <IDSymbol name="IDMX_HTM_SOURCE_ASPX_CODE_VB" value="0x0037" />
+      <IDSymbol name="IDMX_HTM_SOURCE_ASMX_CODE" value="0x0038" />
+      <IDSymbol name="IDMX_HTM_SOURCE_ASMX_CODE_VB" value="0x0039" />
+      <IDSymbol name="IDMX_HTM_SOURCE_ASAX" value="0x003B" />
+      <IDSymbol name="IDMX_HTM_SOURCE_ASAX_CODE" value="0x003C" />
+      <IDSymbol name="IDMX_HTM_SOURCE_ASAX_CODE_VB" value="0x003D" />
+    </GuidSymbol>
+    <GuidSymbol name="guidCssEdGrp" value="{A764E896-518D-11D2-9A89-00C04F79EFC3}">
+      <IDSymbol name="IDMX_HTM_SOURCE_CSS" value="0x0102" />
+    </GuidSymbol>
+    <GuidSymbol name="guidXamlEditorMenus" value="{4C87B692-1202-46AA-B64C-EF01FAEC53DA}">
+      <IDSymbol name="IDM_XAML_EDITOR" value="0x0103" />
+    </GuidSymbol>
+    <GuidSymbol name="guidWorkspaceExplorerMenus" value="{CFB400F1-5C60-4F3C-856E-180D28DEF0B7}">
+      <IDSymbol name="IDM_WORKSPACE_ITEM" value="0x0002" />
     </GuidSymbol>
   </Symbols>
 

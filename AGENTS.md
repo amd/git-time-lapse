@@ -87,7 +87,9 @@ visual-studio/               Visual Studio 2022/2026 extension shell
   webpack.config.js          Webpack config (webview bundle)
   extension/                 C# VSIX project
     GitTimeLapsePackage.cs   VS package entry
-    GitTimeLapsePackage.vsct Command table (Tools menu, Solution Explorer, editor context)
+    GitTimeLapsePackage.vsct Command table (Tools menu, Solution Explorer, editor context,
+                             document tab, and the JSON/HTML/CSS/XAML editors' and Open
+                             Folder's own context menus)
     Commands/OpenTimeLapseCommand.cs  Handler for the three command placements
     TimeLapseToolWindow.cs   Tool window (multi-instance)
     TimeLapseToolWindowControl.xaml(.cs)  WebView2 host
