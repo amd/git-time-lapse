@@ -229,7 +229,7 @@ Output: `visual-studio/extension/bin/Release/net472/GitTimeLapse.vsix`
 ## Key Design Decisions
 
 - **All git commands are strictly read-only** (`rev-parse`, `cat-file`, `log`, `show`, `diff`, `ls-files`, `ls-tree`, `for-each-ref`, and `config` reads of `user.name`/`user.email`). No checkout, commit, push, or reset. `git blame` is never run.
-- **Precaching** uses parallel `git log -p` ranges to reconstruct content and derive blame from patches in-memory, reducing total git commands from `3*N` to `1 + 2*workers`.
+- **Precaching** fetches every revision's patch with parallel `git log -p` ranges, reducing total git commands from `3*N` to `1 + workers`, and derives blame by replaying them. It keeps the patches plus a snapshot every 32 revisions and rebuilds other revisions on demand, so memory stays small even for large files with long histories.
 - **Per-platform preferences** stored in `~/.git_time_lapse.json` with platform sub-keys (`desktop`, `vscode`, `vs`).
 - **Linux builds run in-tree**, either on a Linux machine or from Windows via WSL (building the Windows checkout in place through `/mnt/`), to preserve the `.git` directory (needed for build-time commit hash) and allow incremental Rust builds.
 - **Dual Tauri shells** exist only because Tauri v2 cannot build on RHEL8 or RHEL9 (glib 2.56.4 / 2.68 versus the required >= 2.70). Tauri v1 builds there and its binary carries a glibc 2.28 floor. Both shells share one Rust command module and one frontend behind the `@shell/tauri-api` alias, so there is no forked logic. v2 is the default on every other platform.

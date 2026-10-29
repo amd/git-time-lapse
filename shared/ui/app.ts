@@ -5188,12 +5188,11 @@ class App {
   /**
    * Build `lifetimeEndMap`: for every physical line (keyed by
    * "commitHex:originLine") ever seen in blame, the last 0-based revision index
-   * at which it still appears. Runs ONCE after precache (all revisions' blame is
-   * cached) so lifetimeBar can end a chunk's bar at the revision before it was
-   * deleted instead of always extending to the end of history. Scans backward
-   * from the last real revision: a line missing from revision N but present in
-   * N+1 was deleted between them, so its lifetime ends at N+1, recorded the
-   * first (latest) time we encounter it walking backward. Keying per line rather
+   * at which it still appears. Runs ONCE after precache (every revision's blame
+   * can then be rebuilt) so lifetimeBar can end a chunk's bar at the revision
+   * before it was deleted instead of always extending to the end of history.
+   * Scans forward to the last real revision, overwriting, so each line keeps the
+   * latest revision it appears in. Keying per line rather
    * than per commit keeps disjoint chunks from the same commit independent, so a
    * chunk deleted early doesn't inherit a surviving sibling chunk's later end.
    * Blame that comes back empty (cache miss) is skipped; lines only seen in
@@ -5206,7 +5205,10 @@ class App {
     if (last < 0) return;
     const token = this.precacheToken;
     const map = this.lifetimeEndMap;
-    for (let idx = last; idx >= 0; idx--) {
+    // Oldest first, overwriting, so each key ends at the latest revision that
+    // still has the line. Walking forward lets the backend rebuild each
+    // revision from the previous one with a single patch.
+    for (let idx = 0; idx <= last; idx++) {
       if (token !== this.precacheToken) return;
       const hex = this.commits[idx].hexSha;
       const segPath = this.followRenamesActive
@@ -5225,8 +5227,7 @@ class App {
         // A block's lines are contiguous in origin: line j has origin
         // entry.originLine + j. Record each so per-line lookups resolve.
         for (let j = 0; j < entry.lines.length; j++) {
-          const key = this.lifetimeKey(entry.commitHex, entry.originLine + j);
-          if (!map.has(key)) map.set(key, idx);
+          map.set(this.lifetimeKey(entry.commitHex, entry.originLine + j), idx);
         }
       }
     }
