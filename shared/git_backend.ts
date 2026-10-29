@@ -146,6 +146,13 @@ function cacheKey(...parts: string[]): string {
 /** Provides time-lapse data for a single file within a git repository. */
 export class GitTimeLapse {
   private cache = new Map<string, unknown>();
+  // Patch-replay store built by populateFromLog, and the revisions most
+  // recently rebuilt from it (insertion order = least recently used first).
+  private replay: ReplayStore | null = null;
+  private recentStates = new Map<number, ReplayState>();
+  // Content fetched with `git show` for commits the precache doesn't cover,
+  // oldest first, so that cache stays bounded.
+  private fetchedContentKeys: string[] = [];
   private repoRoot = "";
   filePath = "";
   /**
@@ -790,47 +797,52 @@ export class GitTimeLapse {
   // -- precache ----------------------------------------------------------
 
   /**
-   * Warm the entire cache in two phases.
+   * Prepare every revision's content and blame without keeping a full copy of
+   * each. Memory is what this design is about: storing the text and per-line
+   * blame of every revision grew with file size times revision count (about
+   * 2 GB for an 18,000-line file with 1,500 revisions), so only the patches are
+   * kept, plus a full snapshot every REPLAY_CHECKPOINT_INTERVAL revisions.
+   * {@link replayState} rebuilds any other revision on demand by replaying
+   * patches forward from the nearest snapshot or recently rebuilt revision.
    *
-   * Phase 1 (parallel content): split the commit list into up to `WORKERS`
-   * ranges and, for each, `git show <prev>:<file>` to seed content then
-   * `git log -p --reverse <start>^..<end> -- <file>` to get patches, replaying
-   * them forward to reconstruct (and cache) the file content at every commit.
-   * Each parsed patch is stashed in a local `patches` map (keyed by short hex).
+   * Phase 1 (parallel): split the commit list into up to `WORKERS` ranges and
+   * run `git log -p --reverse <prev>..<end> -- <file>` for each, keeping each
+   * commit's patch and whether its new side ends with a newline.
    *
-   * Phase 2 (sequential blame): after all ranges finish, replay every patch in
-   * commit order from an empty file, carrying per-line blame forward. This is
-   * the only correct way to attribute lines: the parallel ranges can't know the
-   * true blame of context lines they inherit from a neighbouring range's tail,
-   * so blame is derived here where the full ordered history is available. It
-   * issues no new git calls; it reuses the patches captured in phase 1 (or, for
-   * the rare commit whose patch replay failed, re-seeds from that commit's
-   * already-cached content).
+   * Phase 2 (sequential): replay every patch in commit order from an empty
+   * file, carrying per-line blame forward, and keep a snapshot at the interval
+   * and at the newest revision. Blame has to be derived here, where the full
+   * ordered history is available: a range can't know the true blame of the
+   * context lines it inherits from the range before it. A commit whose patch is
+   * missing or can't be replayed is re-seeded from its blob (`git show`), and
+   * that state becomes a snapshot, since it can't be derived from a patch.
    *
-   * Total git commands: 1 (commit list) + 2*workers (seed + log -p per range)
-   * instead of 3*N individual calls.
+   * Total git commands: 1 (commit list) + `WORKERS` (log -p per range), plus a
+   * `git show` for each commit whose replay fails.
    *
-   * Best-effort: any error in a range leaves those revisions uncached so the
-   * per-command fallbacks in getFileContent/getDiffDetail serve them.
+   * Best-effort: revisions past an unrecoverable failure aren't covered, so
+   * getFileContent falls back to `git show` and getBlame returns no blame.
    */
   async populateFromLog(
     onProgress?: (done: number, total: number) => void,
     workerCount?: number | null,
   ): Promise<void> {
+    this.replay = null;
+    this.recentStates.clear();
     const cpus = typeof navigator !== "undefined" ? navigator.hardwareConcurrency : 0;
     const WORKERS = (workerCount && workerCount > 0) ? workerCount : Math.max(2, Math.floor((cpus || 16) / 2));
     let commitHashes: string[];
     // Per-commit author metadata keyed by 8-char hex, carried into the
-    // sequential blame pass so added/modified lines get real author/date info.
+    // sequential replay so added/modified lines get real author/date info.
     const commitMeta = new Map<
       string,
       { authorName: string; authorEmail: string; authoredDate: Date }
     >();
     try {
       // Must mirror getCommits()'s commit selection (--first-parent) so the hash
-      // list (and therefore the indices, seed hashes, and cache keys) line up
-      // with what the UI requests. NUL-delimited fields + SOH record separator
-      // keep author names/dates parseable even with odd characters.
+      // list (and therefore the indices and keys) line up with what the UI
+      // requests. NUL-delimited fields + SOH record separator keep author
+      // names/dates parseable even with odd characters.
       const out = await this.gitText([
         "log", "--first-parent", "--format=%x01%H%x00%an%x00%ae%x00%aI",
         "--reverse", this.ref, "--", this.filePath,
@@ -861,38 +873,13 @@ export class GitTimeLapse {
       ranges.push({ start: i, end: Math.min(i + rangeSize, total) });
     }
 
-    // Patches parsed during the parallel content phase, keyed by short hex, so
-    // the sequential blame pass can replay them in order without new git calls.
-    // A commit absent from this map (its patch replay failed and it was re-seeded
-    // from the blob) triggers a content re-seed in the blame pass instead.
-    const patches = new Map<string, string>();
-
+    // Patches parsed in phase 1, keyed by short hex. A commit absent from this
+    // map (its range's log failed) is re-seeded from its blob in phase 2.
+    const patches = new Map<string, { patch: string; trailingNewline: boolean | null }>();
     let done = 0;
 
     const processRange = async (range: { start: number; end: number }): Promise<void> => {
       const endHash = commitHashes[range.end - 1];
-
-      // Seed: get the file content at the commit before the range's first commit
-      // so we can replay patches forward. For the first range (start=0), there's
-      // no prior commit; the first patch is a full add against /dev/null.
-      let seedContent: string[] = [];
-      if (range.start > 0) {
-        const prevHash = commitHashes[range.start - 1];
-        try {
-          const bytes = await this.transport.runGitBytes(
-            ["show", `${prevHash}:${this.filePath}`],
-            this.repoRoot,
-          );
-          const text = decode(bytes);
-          seedContent = text.endsWith("\n")
-            ? text.slice(0, -1).split("\n")
-            : text.split("\n");
-        } catch {
-          return; // can't seed this range; fall back to per-command
-        }
-      }
-
-      // Get patches for this range
       let logOut: string;
       try {
         const revRange = range.start === 0
@@ -921,72 +908,13 @@ export class GitTimeLapse {
       } catch {
         return;
       }
-
-      const commits = GitTimeLapse.parseLogWithPatches(logOut);
-      let content = seedContent;
-      // Blame is a throwaway placeholder here: the parallel phase only
-      // reconstructs content. Real per-line blame is derived in the sequential
-      // pass below. applyPatchForward still needs a blame array to mutate, so
-      // pass one of matching length filled with empty attribution.
-      let blame: LineBlame[] = seedContent.map(() => EMPTY_BLAME);
       let prevHex = range.start > 0 ? commitHashes[range.start - 1].slice(0, 8) : "";
-
-      for (const commit of commits) {
+      for (const commit of GitTimeLapse.parseLogWithPatches(logOut)) {
         const hex = commit.hexSha.slice(0, 8);
-
         if (prevHex) {
           this.cache.set(cacheKey("patch", prevHex, hex), commit.patch);
         }
-        // Stash every commit's patch (including the first, which prevHex skips)
-        // for the sequential blame replay.
-        patches.set(hex, commit.patch);
-
-        try {
-          const applied = applyPatchForward(content, blame, commit.patch, EMPTY_ATTRIB);
-          content = applied.content;
-          blame = applied.blame;
-        } catch {
-          // Patch replay failed for this commit. Re-seed content from the real
-          // blob so the *next* commit's patch applies against correct text
-          // (leaving content stale here would corrupt every later revision). Drop
-          // this commit's patch from the map so the blame pass re-seeds too. If
-          // even the fallback fails, drop this range's replay to avoid feeding
-          // downstream commits from a desynced state.
-          patches.delete(hex);
-          try {
-            const bytes = await this.transport.runGitBytes(
-              ["show", `${commit.hexSha}:${this.filePath}`],
-              this.repoRoot,
-            );
-            const text = decode(bytes);
-            content = text.endsWith("\n")
-              ? text.slice(0, -1).split("\n")
-              : text.split("\n");
-            blame = content.map(() => EMPTY_BLAME);
-            if (!text.includes("\0")) {
-              this.cache.set(cacheKey("content", hex), text);
-            }
-            prevHex = hex;
-            done += 1;
-            onProgress?.(done, total);
-            continue;
-          } catch {
-            return; // can't recover; per-command fallbacks serve the rest
-          }
-        }
-
-        const text =
-          content.length === 0
-            ? ""
-            : content.join("\n") + (commit.trailingNewline ? "\n" : "");
-        if (text.includes("\0")) {
-          prevHex = hex;
-          done += 1;
-          onProgress?.(done, total);
-          continue;
-        }
-        this.cache.set(cacheKey("content", hex), text);
-
+        patches.set(hex, { patch: commit.patch, trailingNewline: commit.trailingNewline });
         prevHex = hex;
         done += 1;
         onProgress?.(done, total);
@@ -995,66 +923,137 @@ export class GitTimeLapse {
 
     await Promise.all(ranges.map((r) => processRange(r)));
 
-    // Phase 2: sequential blame pass. Replay every commit's patch in order from
-    // an empty file, carrying per-line blame forward so context lines keep their
-    // true origin commit. Content is already cached from phase 1; this only
-    // computes and caches blame. No new git calls (patches were captured above).
-    let content: string[] = [];
-    let blame: LineBlame[] = [];
-    for (const fullHash of commitHashes) {
-      const hex = fullHash.slice(0, 8);
+    // Phase 2: sequential replay from an empty file.
+    const store: ReplayStore = {
+      index: new Map(),
+      steps: [],
+      checkpoints: new Map(),
+    };
+    let state: ReplayState = { content: [], blame: [], trailingNewline: true };
+    for (let pos = 0; pos < total; pos++) {
+      const hex = commitHashes[pos].slice(0, 8);
       const meta = commitMeta.get(hex);
-      const storedPatch = patches.get(hex);
-
-      if (storedPatch === undefined) {
-        // This commit's patch replay failed in phase 1 (re-seeded from blob).
-        // Re-seed blame from the cached content so later commits stay aligned.
-        const cachedText = this.cache.get(cacheKey("content", hex)) as string | undefined;
-        if (cachedText === undefined) {
-          // Content was never cached (e.g. binary or unrecoverable). Give up on
-          // the rest; remaining commits fall back to per-command blame (empty).
-          break;
+      const attrib: CommitAttribution = {
+        commitHex: hex,
+        authorName: meta?.authorName ?? "",
+        authorEmail: meta?.authorEmail ?? "",
+        authoredDate: meta?.authoredDate ?? new Date(0),
+      };
+      const stored = patches.get(hex);
+      let replayed: ReplayState | null = null;
+      if (stored !== undefined) {
+        try {
+          const applied = applyPatchForward(state.content, state.blame, stored.patch, attrib);
+          replayed = {
+            content: applied.content,
+            blame: applied.blame,
+            trailingNewline: stored.trailingNewline ?? state.trailingNewline,
+          };
+        } catch {
+          replayed = null;
         }
-        content = cachedText === ""
-          ? []
-          : (cachedText.endsWith("\n") ? cachedText.slice(0, -1) : cachedText).split("\n");
-        blame = content.map((_, idx) => ({
-          commitHex: hex,
-          authorName: meta?.authorName ?? "",
-          authorEmail: meta?.authorEmail ?? "",
-          authoredDate: meta?.authoredDate ?? new Date(0),
-          originLine: idx + 1,
-        }));
-        this.cache.set(cacheKey("blame", hex), blameToEntries(blame));
-        continue;
       }
+      if (replayed !== null) {
+        state = replayed;
+        store.steps.push({ patch: stored!.patch, trailingNewline: replayed.trailingNewline, attrib });
+      } else {
+        // No usable patch: re-seed from the blob, attributing every line to
+        // this commit (its true origin can't be recovered without the patch).
+        const seeded = await this.seedStateFromBlob(commitHashes[pos], attrib);
+        if (seeded === null) break; // later revisions stay uncovered
+        state = seeded;
+        store.steps.push(null);
+        store.checkpoints.set(pos, state);
+      }
+      store.index.set(hex, pos);
+      if ((pos + 1) % REPLAY_CHECKPOINT_INTERVAL === 0) store.checkpoints.set(pos, state);
+    }
+    if (store.steps.length > 0) {
+      store.checkpoints.set(store.steps.length - 1, state);
+      this.replay = store;
+    }
+  }
 
-      try {
-        const applied = applyPatchForward(content, blame, storedPatch, {
-          commitHex: hex,
-          authorName: meta?.authorName ?? "",
-          authorEmail: meta?.authorEmail ?? "",
-          authoredDate: meta?.authoredDate ?? new Date(0),
-        });
-        content = applied.content;
-        blame = applied.blame;
-      } catch {
-        // Should not happen (phase 1 already validated the replay), but stay
-        // robust: re-seed from cached content and continue.
-        const cachedText = this.cache.get(cacheKey("content", hex)) as string | undefined;
-        if (cachedText === undefined) break;
-        content = cachedText === ""
-          ? []
-          : (cachedText.endsWith("\n") ? cachedText.slice(0, -1) : cachedText).split("\n");
-        blame = content.map((_, idx) => ({
-          commitHex: hex,
-          authorName: meta?.authorName ?? "",
-          authorEmail: meta?.authorEmail ?? "",
-          authoredDate: meta?.authoredDate ?? new Date(0),
-          originLine: idx + 1,
-        }));
+  /** The state of a commit's blob, every line attributed to `attrib`. */
+  private async seedStateFromBlob(
+    fullHash: string,
+    attrib: CommitAttribution,
+  ): Promise<ReplayState | null> {
+    let text: string;
+    try {
+      text = decode(await this.transport.runGitBytes(
+        ["show", `${fullHash}:${this.filePath}`],
+        this.repoRoot,
+      ));
+    } catch {
+      return null;
+    }
+    const content = text === ""
+      ? []
+      : (text.endsWith("\n") ? text.slice(0, -1) : text).split("\n");
+    return {
+      content,
+      blame: content.map((_, idx) => ({ ...attrib, originLine: idx + 1 })),
+      trailingNewline: text === "" || text.endsWith("\n"),
+    };
+  }
+
+  /**
+   * Rebuild the content and blame at a covered commit by replaying patches
+   * forward from the closest earlier snapshot or recently rebuilt revision.
+   * Every intermediate state is kept in the small recent-state cache, so a walk
+   * through neighbouring revisions in either direction replays each patch about
+   * once. Returns null for a commit precaching didn't cover.
+   */
+  private replayState(commitHex: string): ReplayState | null {
+    const store = this.replay;
+    if (!store) return null;
+    const target = store.index.get(commitHex);
+    if (target === undefined) return null;
+    const hit = this.recentStates.get(target);
+    if (hit) {
+      this.recentStates.delete(target);
+      this.recentStates.set(target, hit);
+      return hit;
+    }
+
+    let basePos = -1;
+    let base: ReplayState = { content: [], blame: [], trailingNewline: true };
+    for (const [pos, st] of store.checkpoints) {
+      if (pos <= target && pos > basePos) { basePos = pos; base = st; }
+    }
+    for (const [pos, st] of this.recentStates) {
+      if (pos <= target && pos > basePos) { basePos = pos; base = st; }
+    }
+
+    let state = base;
+    for (let pos = basePos + 1; pos <= target; pos++) {
+      const step = store.steps[pos];
+      if (step === null) {
+        // Seeded from a blob in phase 2, so it is always a snapshot.
+        const seeded = store.checkpoints.get(pos);
+        if (!seeded) return null;
+        state = seeded;
+      } else {
+        // Phase 2 already replayed this exact sequence, so this shouldn't throw;
+        // if it does, treat the commit as uncovered.
+        try {
+          const applied = applyPatchForward(state.content, state.blame, step.patch, step.attrib);
+          state = { content: applied.content, blame: applied.blame, trailingNewline: step.trailingNewline };
+        } catch {
+          return null;
+        }
       }
-      this.cache.set(cacheKey("blame", hex), blameToEntries(blame));
+      this.rememberState(pos, state);
+    }
+    return state;
+  }
+
+  private rememberState(pos: number, state: ReplayState): void {
+    this.recentStates.delete(pos);
+    this.recentStates.set(pos, state);
+    while (this.recentStates.size > RECENT_STATE_LIMIT) {
+      this.recentStates.delete(this.recentStates.keys().next().value as number);
     }
   }
 
@@ -1101,23 +1100,22 @@ export class GitTimeLapse {
         isoDate,
         message,
         patch,
-        // Whether the reconstructed file ends with a newline. False only when
-        // the patch's final new-side line carries a "\ No newline at end of
-        // file" marker; true otherwise (the common case).
-        trailingNewline: !patchEndsWithoutNewline(patch),
+        // Whether the file ends with a newline after this commit, or null when
+        // the patch leaves that unchanged (see patchTrailingNewline).
+        trailingNewline: patchTrailingNewline(patch),
       });
     }
     return commits;
   }
 
   /**
-   * Whether content, blame, and diff are all cached for a commit. The diff key
+   * Whether content and blame can be rebuilt from the precache and the diff is
+   * cached for a commit. The diff key
    * depends on the previous commit, which this method doesn't know, so it
    * treats any cached diff whose new-side hash matches as a hit.
    */
   isCached(commitHex: string): boolean {
-    if (!this.cache.has(cacheKey("content", commitHex))) return false;
-    if (!this.cache.has(cacheKey("blame", commitHex))) return false;
+    if (!this.replay?.index.has(commitHex)) return false;
     for (const key of this.cache.keys()) {
       const p = key.split("\x00");
       if (p[0] === "diff" && p[2] === commitHex) return true;
@@ -1128,13 +1126,23 @@ export class GitTimeLapse {
   // -- content -----------------------------------------------------------
 
   /**
-   * Return the file's content at the given commit as text. Uses the
+   * Return the file's content at the given commit as text, rebuilt from the
+   * precache when it covers the commit. Otherwise uses the
    * `git show <rev>:<path>` object syntax so git returns the file blob at that
-   * revision, not the commit object. An empty commitHex is rejected outright.
+   * revision, not the commit object, keeping only the most recent few of those
+   * results. An empty commitHex is rejected outright.
    */
   async getFileContent(commitHex: string): Promise<string> {
     if (!commitHex) {
       throw new FileNotFoundError("Empty commit ref for getFileContent");
+    }
+    const state = this.replayState(commitHex);
+    if (state) {
+      state.text ??= state.content.length === 0
+        ? ""
+        : state.content.join("\n") + (state.trailingNewline ? "\n" : "");
+      // NUL bytes mean binary: let the git path below raise BinaryFileError.
+      if (!state.text.includes("\0")) return state.text;
     }
     const key = cacheKey("content", commitHex);
     const cached = this.cache.get(key);
@@ -1154,24 +1162,27 @@ export class GitTimeLapse {
     // decode() may throw BinaryFileError (NUL bytes); let that propagate.
     const content = decode(bytes);
     this.cache.set(key, content);
+    this.fetchedContentKeys.push(key);
+    if (this.fetchedContentKeys.length > FETCHED_CONTENT_LIMIT) {
+      this.cache.delete(this.fetchedContentKeys.shift()!);
+    }
     return content;
   }
 
   // -- blame -------------------------------------------------------------
 
   /**
-   * Return blame data for the file at the given commit. Blame is derived from
-   * patches by populateFromLog and stored in the cache; this is a cache-only
-   * lookup. The expensive `git blame --porcelain` call has been removed since
-   * precache always runs (and completes) before any revision is displayed. If
-   * the cache is somehow cold for a commit, return an empty blame rather than
-   * falling back to git.
+   * Return blame data for the file at the given commit, rebuilt from the
+   * patches populateFromLog keeps. The expensive `git blame --porcelain` call
+   * has been removed since precache always runs (and completes) before any
+   * revision is displayed. For a commit precaching didn't cover, return an
+   * empty blame rather than falling back to git.
    */
   async getBlame(commitHex: string): Promise<BlameEntry[]> {
-    const key = cacheKey("blame", commitHex);
-    const cached = this.cache.get(key);
-    if (cached) return cached as BlameEntry[];
-    return [];
+    const state = this.replayState(commitHex);
+    if (!state) return [];
+    state.entries ??= blameToEntries(state.blame);
+    return state.entries;
   }
 
   // -- diff --------------------------------------------------------------
@@ -1459,7 +1470,8 @@ export class GitTimeLapse {
         authorEmail: "",
         authoredDate: new Date(),
       });
-      const trailingNewline = !patchEndsWithoutNewline(patch);
+      const trailingNewline =
+        patchTrailingNewline(patch) ?? (baseText === "" || baseText.endsWith("\n"));
       return applied.content.length === 0
         ? ""
         : applied.content.join("\n") + (trailingNewline ? "\n" : "");
@@ -1769,7 +1781,7 @@ interface ParsedLogCommit {
   isoDate: string;
   message: string;
   patch: string; // raw unified diff for this commit (may be empty)
-  trailingNewline: boolean; // does the new-side file end with a newline?
+  trailingNewline: boolean | null; // new side ends with a newline? null = unchanged
 }
 
 /** Blame ownership for a single line, replayed forward across revisions. */
@@ -1794,44 +1806,63 @@ interface CommitAttribution {
 }
 
 /**
- * Placeholder blame/attribution for the parallel content phase, which
- * reconstructs content only; real per-line blame is derived in the sequential
- * pass. Shared singletons avoid allocating throwaway objects per line.
+ * One revision's file content and per-line blame, as rebuilt by patch replay.
+ * The arrays are shared between revisions and never mutated; `text` and
+ * `entries` are derived on first use.
  */
-const EMPTY_BLAME: LineBlame = {
-  commitHex: "",
-  authorName: "",
-  authorEmail: "",
-  authoredDate: new Date(0),
-  originLine: 0,
-};
-const EMPTY_ATTRIB: CommitAttribution = EMPTY_BLAME;
+interface ReplayState {
+  content: string[];
+  blame: LineBlame[];
+  trailingNewline: boolean;
+  text?: string;
+  entries?: BlameEntry[];
+}
 
 /**
- * True when the patch's final new-side line lacks a trailing newline, i.e. a
- * "\ No newline at end of file" marker follows the last `+` or context line
- * (not a `-` line, whose no-newline marker refers to the *old* side). We scan
- * for the last body line that contributes to the new file and check whether the
- * immediately following line is the marker.
+ * What populateFromLog keeps instead of every revision's content and blame:
+ * each commit's patch (null when it was seeded from its blob instead), and
+ * full states at regular intervals, at each blob seed, and at the newest
+ * revision. Positions index the oldest-first commit list.
  */
-function patchEndsWithoutNewline(patch: string): boolean {
+interface ReplayStore {
+  index: Map<string, number>; // short hex -> position
+  steps: ({ patch: string; trailingNewline: boolean; attrib: CommitAttribution } | null)[];
+  checkpoints: Map<number, ReplayState>;
+}
+
+/**
+ * Revisions between full snapshots. Rebuilding a revision replays at most this
+ * many patches; memory holds total / interval snapshots.
+ */
+const REPLAY_CHECKPOINT_INTERVAL = 32;
+/**
+ * Rebuilt revisions kept for reuse. At least the snapshot interval, so walking
+ * backwards through a span reuses the states rebuilt for the first step.
+ */
+const RECENT_STATE_LIMIT = REPLAY_CHECKPOINT_INTERVAL + 8;
+/** Contents fetched with `git show` (commits the precache doesn't cover) kept. */
+const FETCHED_CONTENT_LIMIT = 16;
+
+/**
+ * Whether the file ends with a newline after this patch: false when a
+ * "\ No newline at end of file" marker follows a `+` or context line (the new
+ * side lacks one), true when the only markers follow `-` lines (the old side
+ * lacked one and the new side doesn't), and null when the patch has no marker,
+ * meaning the file's last line is unchanged in that respect. A hunk that
+ * reaches the end of the file always shows the marker when either side lacks
+ * the newline, so no marker means the previous state carries over; a patch that
+ * only edits earlier lines can't be read as "ends with a newline".
+ */
+function patchTrailingNewline(patch: string): boolean | null {
   const lines = patch.split("\n");
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i];
-    if (line.startsWith("\\")) continue; // the marker itself
-    if (line === "") continue; // trailing blank from the final split
-    // A '-' line's no-newline marker is about the old side; ignore it. Only a
-    // '+' or context line as the last new-side content decides the new file.
-    if (line.startsWith("-")) return false;
-    if (line.startsWith("+") || line.startsWith(" ") || !line.startsWith("@")) {
-      // Look at what preceded this line in the reversed walk: if the *next*
-      // (i+1) line was the marker, this line has no trailing newline.
-      const next = lines[i + 1] ?? "";
-      return next.startsWith("\\");
-    }
-    return false;
+  let oldSideMarker = false;
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].startsWith("\\")) continue;
+    const prev = lines[i - 1];
+    if (prev.startsWith("+") || prev.startsWith(" ")) return false;
+    if (prev.startsWith("-")) oldSideMarker = true;
   }
-  return false;
+  return oldSideMarker ? true : null;
 }
 
 /**
